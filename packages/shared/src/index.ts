@@ -3,6 +3,7 @@ export * from "./prng.js";
 export * from "./seed.js";
 export * from "./activity.js";
 export * from "./chatfilter.js";
+export * from "./payments.js";
 export * from "./config.js";
 export * from "./types.js";
 export * from "./curve.js";
