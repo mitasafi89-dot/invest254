@@ -1,7 +1,7 @@
 import type { AddressInfo } from "node:net";
 import { DEFAULT_CONFIG, type Cents } from "@printpesa/shared";
 import {
-  InMemoryEngagementRepository, InMemoryPaymentRepository, StubDarajaClient,
+  InMemoryEngagementRepository, InMemoryPaymentRepository, InMemoryGameRepository, StubDarajaClient,
   PaymentService, ChatService, ActivityService, maskHandle,
   type FairnessRecord, type AuthClaims, type Verifier,
 } from "@printpesa/engine";
@@ -33,6 +33,7 @@ export interface TestApi {
   deps: ApiDeps;
   engage: InMemoryEngagementRepository;
   payRepo: InMemoryPaymentRepository;
+  gameRepo: InMemoryGameRepository;
   daraja: StubDarajaClient;
   fairness: Map<number, FairnessRecord>;
   bonus: Map<string, Cents>;
@@ -50,6 +51,8 @@ export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> 
 
   const payRepo = new InMemoryPaymentRepository();
   payRepo.seed(TEST_USER, opts.startingBalanceCents ?? 1_000_000); // KES 10,000
+  const gameRepo = new InMemoryGameRepository();
+  gameRepo.seed(TEST_USER, opts.startingBalanceCents ?? 1_000_000);
   const daraja = new StubDarajaClient();
   const withdrawalSuccesses: Array<{ userId: string; amountCents: Cents }> = [];
   const activity = new ActivityService(engage, () => {}, { enabled: false });
@@ -84,6 +87,10 @@ export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> 
     resolveHandle,
     walletBalance: async (userId): Promise<WalletBalance> =>
       ({ real: await payRepo.getBalance(userId), bonus: bonus.get(userId) ?? 0, currency: "KES" }),
+    ledger: (userId, q) => gameRepo.listLedger(userId, q),
+    positions: (userId, q) => gameRepo.listPositions(userId, q),
+    positionDetail: (userId, id) => gameRepo.getPositionDetail(userId, id),
+    transactions: (userId, q) => payRepo.listTransactions(userId, q),
     ...opts.depsOverrides,
   };
 
@@ -93,7 +100,7 @@ export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> 
 
   return {
     baseUrl: `http://127.0.0.1:${port}`,
-    deps, engage, payRepo, daraja, fairness, bonus, withdrawalSuccesses,
+    deps, engage, payRepo, gameRepo, daraja, fairness, bonus, withdrawalSuccesses,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }

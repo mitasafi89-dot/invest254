@@ -5,7 +5,7 @@
  * keyset `(timestamp, id)`), so the two never need to agree on a wire format. All list
  * endpoints are newest-first and capped at MAX_PAGE_LIMIT.
  */
-export interface PageQuery { limit?: number; cursor?: string | null; }
+export interface PageQuery { limit?: number | undefined; cursor?: string | null | undefined; }
 export interface Page<T> { items: T[]; nextCursor: string | null; }
 
 export const DEFAULT_PAGE_LIMIT = 30;

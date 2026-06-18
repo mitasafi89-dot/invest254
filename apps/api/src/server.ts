@@ -83,6 +83,10 @@ async function buildDeps(): Promise<ApiDeps> {
       const toCents = (v: unknown): number => (typeof v === "string" ? Number(v) : (v as number)) || 0;
       return { real: toCents(x.real_balance), bonus: toCents(x.bonus_balance), currency: String(x.currency ?? "KES") };
     },
+    ledger: (userId, qy) => repo.listLedger(userId, qy),
+    positions: (userId, qy) => repo.listPositions(userId, qy),
+    positionDetail: (userId, id) => repo.getPositionDetail(userId, id),
+    transactions: (userId, qy) => payRepo.listTransactions(userId, qy),
   };
 }
 

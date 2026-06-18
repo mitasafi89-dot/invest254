@@ -1,7 +1,11 @@
 import { rtp, type GameConfig, type Cents } from "@printpesa/shared";
-import type { FairnessRecord, ActivityRow, ChatRow, ChatPostResult, PaymentService, Verifier } from "@printpesa/engine";
+import type {
+  FairnessRecord, ActivityRow, ChatRow, ChatPostResult, PaymentService, Verifier,
+  Page, PageQuery, LedgerEntry, PositionRecord, PositionDetail, PositionListQuery, TransactionRecord, TxListQuery,
+} from "@printpesa/engine";
 import { Router, ApiError, serverFrom, type Ctx } from "./http.js";
 import { registerProtectedRoutes } from "./app.payments.js";
+import { registerHistoryRoutes } from "./app.history.js";
 import type { Server } from "node:http";
 
 /**
@@ -33,6 +37,12 @@ export interface ApiDeps {
   resolveHandle(userId: string): Promise<string>;
   /** Wallet balances (real + bonus) for the authenticated player. */
   walletBalance(userId: string): Promise<WalletBalance>;
+
+  // ── F2: player history reads (each scoped to the caller's own userId) ──
+  ledger(userId: string, q: PageQuery): Promise<Page<LedgerEntry>>;
+  positions(userId: string, q: PositionListQuery): Promise<Page<PositionRecord>>;
+  positionDetail(userId: string, positionId: string): Promise<PositionDetail | null>;
+  transactions(userId: string, q: TxListQuery): Promise<Page<TransactionRecord>>;
 }
 
 const BASE = "/api/v1";
@@ -103,6 +113,7 @@ export function createRouter(deps: ApiDeps): Router {
   const router = new Router();
   registerPublicRoutes(router, deps);
   registerProtectedRoutes(router, deps);
+  registerHistoryRoutes(router, deps);
   return router;
 }
 
