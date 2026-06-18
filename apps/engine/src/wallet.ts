@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { type Cents, assertCents } from "@printpesa/shared";
 import type { Direction } from "@printpesa/shared";
+import {
+  type Page, type PageQuery, clampLimit, decodeCursor, decodeKeyset, pageFrom,
+} from "./paging.js";
 
 /**
  * GameRepository: the durable, money-atomic boundary. "Open" (debit stake + insert
@@ -32,6 +35,26 @@ export interface FairnessRecord {
   serverSeed: string | null; revealedAt: string | null;
 }
 
+/** A wallet ledger entry as shown in a player's history. */
+export interface LedgerEntry {
+  id: number; type: string; amountCents: Cents; balanceKind: string;
+  refTable: string | null; refId: string | null; meta: unknown; createdAtMs: number;
+}
+
+/** A position as shown in a player's bet history (open or settled). */
+export interface PositionRecord {
+  id: string; userId: string; gameDayId: number | null; direction: Direction;
+  stakeCents: Cents; entryRate: number; exitRate: number | null; multiplier: number | null;
+  payoutCents: Cents | null; pnlCents: Cents | null; result: string | null;
+  durationS: number; status: string; openedAtMs: number; settledAtMs: number | null;
+}
+
+/** A single position plus its day's public fairness data (seed hidden until reveal). */
+export interface PositionDetail extends PositionRecord { fairness: FairnessRecord | null; }
+
+/** Filters for a player's position history. */
+export interface PositionListQuery extends PageQuery { status?: string | undefined; }
+
 export interface GameRepository {
   getBalance(userId: string): Promise<Cents>;
   openPosition(a: OpenArgs): Promise<OpenResult>;
@@ -44,6 +67,12 @@ export interface GameRepository {
   listOpenPositions(): Promise<OpenPositionRow[]>;
   /** Public fairness record for a day, or null if the day is unknown. */
   getFairness(tradeDate: string): Promise<FairnessRecord | null>;
+  /** A player's wallet ledger, newest-first, cursor-paginated. */
+  listLedger(userId: string, q: PageQuery): Promise<Page<LedgerEntry>>;
+  /** A player's position history (optional status filter), newest-first, cursor-paginated. */
+  listPositions(userId: string, q: PositionListQuery): Promise<Page<PositionRecord>>;
+  /** A single owned position with its day's fairness data, or null if not found/owned. */
+  getPositionDetail(userId: string, positionId: string): Promise<PositionDetail | null>;
 }
 
 /** Minimal query surface compatible with `pg`'s Pool/Client. */
@@ -52,9 +81,14 @@ export interface Querier { query(text: string, params: unknown[]): Promise<{ row
 interface MemPos {
   id: string; userId: string; stake: Cents; status: "open" | "settled";
   direction: Direction; durationS: number; openedAtMs: number; entryRate: number;
-  gameDayId: number | null; nonce: number;
+  gameDayId: number | null; nonce: number; seq: number;
+  exitRate: number | null; multiplier: number | null; payout: Cents | null; pnl: Cents | null;
+  result: string | null; settledAtMs: number | null;
 }
-interface MemLedger { userId: string; type: "stake" | "payout" | "seed"; amount: Cents; ref: string; }
+interface MemLedger {
+  id: number; userId: string; type: string; amount: Cents; balanceKind: string;
+  refTable: string | null; refId: string | null; meta: unknown; createdAtMs: number;
+}
 interface MemDay { id: number; tradeDate: string; serverSeedHash: string; serverSeed: string | null; revealedAt: string | null; }
 
 export class InMemoryGameRepository implements GameRepository {
@@ -62,9 +96,17 @@ export class InMemoryGameRepository implements GameRepository {
   private positions = new Map<string, MemPos>();
   private days = new Map<string, MemDay>();
   private nextDayId = 1;
+  private posSeq = 0;
+  private ledgerSeq = 0;
   readonly ledger: MemLedger[] = [];
 
-  seed(userId: string, amount: Cents): void { this.balances.set(userId, assertCents(amount)); this.ledger.push({ userId, type: "seed", amount, ref: "seed" }); }
+  constructor(private readonly now: () => number = () => Date.now()) {}
+
+  private pushLedger(userId: string, type: string, amount: Cents, balanceKind: string, refTable: string | null, refId: string | null, meta: unknown = null): void {
+    this.ledger.push({ id: ++this.ledgerSeq, userId, type, amount, balanceKind, refTable, refId, meta, createdAtMs: this.now() });
+  }
+
+  seed(userId: string, amount: Cents): void { this.balances.set(userId, assertCents(amount)); this.pushLedger(userId, "seed", amount, "real", null, "seed"); }
   async getBalance(userId: string): Promise<Cents> { return this.balances.get(userId) ?? 0; }
 
   async openPosition(a: OpenArgs): Promise<OpenResult> {
@@ -77,9 +119,10 @@ export class InMemoryGameRepository implements GameRepository {
     this.positions.set(id, {
       id, userId: a.userId, stake: a.stakeCents, status: "open",
       direction: a.direction, durationS: a.durationS, openedAtMs: a.openedAtMs,
-      entryRate: a.entryRate, gameDayId: a.gameDayId, nonce: a.nonce,
+      entryRate: a.entryRate, gameDayId: a.gameDayId, nonce: a.nonce, seq: ++this.posSeq,
+      exitRate: null, multiplier: null, payout: null, pnl: null, result: null, settledAtMs: null,
     });
-    this.ledger.push({ userId: a.userId, type: "stake", amount: -a.stakeCents, ref: `positions:${id}` });
+    this.pushLedger(a.userId, "stake", -a.stakeCents, "real", "positions", id);
     return { positionId: id, newBalance: next };
   }
 
@@ -89,8 +132,10 @@ export class InMemoryGameRepository implements GameRepository {
     if (!p) throw new Error("POSITION_NOT_FOUND");
     if (p.status !== "open") return { settled: false, newBalance: this.balances.get(p.userId) ?? 0 }; // idempotent
     p.status = "settled";
+    p.exitRate = a.exitRate; p.multiplier = a.multiplier; p.payout = a.payoutCents;
+    p.pnl = a.payoutCents - p.stake; p.result = a.result; p.settledAtMs = this.now();
     let bal = this.balances.get(p.userId) ?? 0;
-    if (a.payoutCents > 0) { bal += a.payoutCents; this.balances.set(p.userId, bal); this.ledger.push({ userId: p.userId, type: "payout", amount: a.payoutCents, ref: `positions:${a.positionId}` }); }
+    if (a.payoutCents > 0) { bal += a.payoutCents; this.balances.set(p.userId, bal); this.pushLedger(p.userId, "payout", a.payoutCents, "real", "positions", a.positionId); }
     return { settled: true, newBalance: bal };
   }
 
@@ -125,6 +170,63 @@ export class InMemoryGameRepository implements GameRepository {
     // mirror v_fairness: expose seed only after reveal
     return { gameDayId: day.id, tradeDate: day.tradeDate, serverSeedHash: day.serverSeedHash, serverSeed: day.revealedAt ? day.serverSeed : null, revealedAt: day.revealedAt };
   }
+
+  async listLedger(userId: string, q: PageQuery): Promise<Page<LedgerEntry>> {
+    const limit = clampLimit(q.limit);
+    const after = numCursor(q.cursor);
+    const rows = this.ledger
+      .filter((l) => l.userId === userId && (after === null || l.id < after))
+      .sort((a, b) => b.id - a.id)
+      .slice(0, limit + 1);
+    const page = pageFrom(rows, limit, (l) => String(l.id));
+    return { items: page.items.map(toLedgerEntry), nextCursor: page.nextCursor };
+  }
+
+  async listPositions(userId: string, q: PositionListQuery): Promise<Page<PositionRecord>> {
+    const limit = clampLimit(q.limit);
+    const after = numCursor(q.cursor);
+    const rows = [...this.positions.values()]
+      .filter((p) => p.userId === userId && (q.status === undefined || p.status === q.status) && (after === null || p.seq < after))
+      .sort((a, b) => b.seq - a.seq)
+      .slice(0, limit + 1);
+    const page = pageFrom(rows, limit, (p) => String(p.seq));
+    return { items: page.items.map(toPositionRecord), nextCursor: page.nextCursor };
+  }
+
+  async getPositionDetail(userId: string, positionId: string): Promise<PositionDetail | null> {
+    const p = this.positions.get(positionId);
+    if (!p || p.userId !== userId) return null;
+    let fairness: FairnessRecord | null = null;
+    if (p.gameDayId !== null) {
+      for (const day of this.days.values()) {
+        if (day.id !== p.gameDayId) continue;
+        fairness = { gameDayId: day.id, tradeDate: day.tradeDate, serverSeedHash: day.serverSeedHash, serverSeed: day.revealedAt ? day.serverSeed : null, revealedAt: day.revealedAt };
+        break;
+      }
+    }
+    return { ...toPositionRecord(p), fairness };
+  }
+}
+
+/** Decode an in-memory (numeric-sequence) cursor; null if absent/malformed. */
+function numCursor(cursor?: string | null): number | null {
+  const t = decodeCursor(cursor);
+  if (t === null) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toLedgerEntry(l: MemLedger): LedgerEntry {
+  return { id: l.id, type: l.type, amountCents: l.amount, balanceKind: l.balanceKind, refTable: l.refTable, refId: l.refId, meta: l.meta, createdAtMs: l.createdAtMs };
+}
+
+function toPositionRecord(p: MemPos): PositionRecord {
+  return {
+    id: p.id, userId: p.userId, gameDayId: p.gameDayId, direction: p.direction, stakeCents: p.stake,
+    entryRate: p.entryRate, exitRate: p.exitRate, multiplier: p.multiplier, payoutCents: p.payout,
+    pnlCents: p.pnl, result: p.result, durationS: p.durationS, status: p.status,
+    openedAtMs: p.openedAtMs, settledAtMs: p.settledAtMs,
+  };
 }
 
 /** bigint columns arrive as strings from pg; values are < 2^53 so Number() is exact. */
@@ -177,4 +279,75 @@ export class PgGameRepository implements GameRepository {
       revealedAt: x.revealed_at ? (x.revealed_at instanceof Date ? x.revealed_at.toISOString() : String(x.revealed_at)) : null,
     };
   }
+
+  async listLedger(userId: string, q: PageQuery): Promise<Page<LedgerEntry>> {
+    const limit = clampLimit(q.limit);
+    const cur = decodeKeyset(q.cursor);
+    const r = await this.q.query(
+      `select id, type, amount, balance_kind, ref_table, ref_id, meta, created_at
+         from ledger_entries
+        where user_id = $1
+          and ($2::timestamptz is null or (created_at, id) < ($2::timestamptz, $3::bigint))
+        order by created_at desc, id desc
+        limit $4`,
+      [userId, cur ? new Date(cur.tsMs).toISOString() : null, cur ? cur.id : null, limit + 1]);
+    const rows: LedgerEntry[] = r.rows.map((x) => ({
+      id: Number(x.id), type: String(x.type), amountCents: toCents(x.amount), balanceKind: String(x.balance_kind),
+      refTable: x.ref_table ?? null, refId: x.ref_id ?? null, meta: x.meta ?? null, createdAtMs: toMs(x.created_at),
+    }));
+    return pageFrom(rows, limit, (e) => encodeKeysetToken(e.createdAtMs, e.id));
+  }
+
+  async listPositions(userId: string, q: PositionListQuery): Promise<Page<PositionRecord>> {
+    const limit = clampLimit(q.limit);
+    const cur = decodeKeyset(q.cursor);
+    const r = await this.q.query(
+      `select id, user_id, game_day_id, direction, stake, entry_rate, exit_rate, multiplier, payout, pnl, result, duration_s, status, opened_at, settled_at
+         from positions
+        where user_id = $1
+          and ($2::text is null or status = $2)
+          and ($3::timestamptz is null or (opened_at, id) < ($3::timestamptz, $4::uuid))
+        order by opened_at desc, id desc
+        limit $5`,
+      [userId, q.status ?? null, cur ? new Date(cur.tsMs).toISOString() : null, cur ? cur.id : null, limit + 1]);
+    const rows: PositionRecord[] = r.rows.map(mapPositionRow);
+    return pageFrom(rows, limit, (p) => encodeKeysetToken(p.openedAtMs, p.id));
+  }
+
+  async getPositionDetail(userId: string, positionId: string): Promise<PositionDetail | null> {
+    const r = await this.q.query(
+      `select p.id, p.user_id, p.game_day_id, p.direction, p.stake, p.entry_rate, p.exit_rate, p.multiplier, p.payout, p.pnl, p.result, p.duration_s, p.status, p.opened_at, p.settled_at,
+              f.id as f_id, f.trade_date as f_trade_date, f.server_seed_hash as f_hash, f.server_seed as f_seed, f.revealed_at as f_revealed
+         from positions p
+         left join v_fairness f on f.id = p.game_day_id
+        where p.id = $1::uuid and p.user_id = $2`,
+      [positionId, userId]);
+    if (!r.rows.length) return null;
+    const x = r.rows[0];
+    const fairness: FairnessRecord | null = x.f_id === null || x.f_id === undefined ? null : {
+      gameDayId: Number(x.f_id),
+      tradeDate: x.f_trade_date instanceof Date ? x.f_trade_date.toISOString().slice(0, 10) : String(x.f_trade_date),
+      serverSeedHash: String(x.f_hash), serverSeed: x.f_seed ?? null,
+      revealedAt: x.f_revealed ? (x.f_revealed instanceof Date ? x.f_revealed.toISOString() : String(x.f_revealed)) : null,
+    };
+    return { ...mapPositionRow(x), fairness };
+  }
 }
+
+/** Map a raw `positions` row (optionally joined) into the public PositionRecord. */
+function mapPositionRow(x: any): PositionRecord {
+  return {
+    id: String(x.id), userId: String(x.user_id),
+    gameDayId: x.game_day_id === null || x.game_day_id === undefined ? null : Number(x.game_day_id),
+    direction: x.direction as Direction, stakeCents: toCents(x.stake), entryRate: Number(x.entry_rate),
+    exitRate: x.exit_rate === null || x.exit_rate === undefined ? null : Number(x.exit_rate),
+    multiplier: x.multiplier === null || x.multiplier === undefined ? null : Number(x.multiplier),
+    payoutCents: x.payout === null || x.payout === undefined ? null : toCents(x.payout),
+    pnlCents: x.pnl === null || x.pnl === undefined ? null : toCents(x.pnl),
+    result: x.result ?? null, durationS: Number(x.duration_s), status: String(x.status),
+    openedAtMs: toMs(x.opened_at), settledAtMs: x.settled_at ? toMs(x.settled_at) : null,
+  };
+}
+
+/** Keyset token for Postgres cursors: `<createdAtMs>:<id>`. */
+function encodeKeysetToken(tsMs: number, id: string | number): string { return `${tsMs}:${id}`; }

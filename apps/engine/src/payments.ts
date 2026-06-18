@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type Cents, assertCents } from "@printpesa/shared";
 import type { Querier } from "./wallet.js";
+import { type Page, type PageQuery, clampLimit, decodeCursor, decodeKeyset, pageFrom } from "./paging.js";
 
 /**
  * PaymentRepository: durable, money-atomic boundary for deposits/withdrawals. Each method
@@ -13,6 +14,14 @@ export interface CreateWithdrawalResult { txId: string; newBalance: Cents; }
 export interface ApproveResult { approved: boolean; amountCents: Cents | null; phone: string | null; }
 export interface TxRow { id: string; userId: string; kind: "deposit" | "withdrawal"; amountCents: Cents; status: string; phone: string; }
 
+/** A transaction as shown in a player's payment history. */
+export interface TransactionRecord {
+  id: string; kind: "deposit" | "withdrawal"; amountCents: Cents; status: string;
+  provider: string; phone: string; mpesaReceipt: string | null; createdAtMs: number;
+}
+/** Filters for a player's transaction history. */
+export interface TxListQuery extends PageQuery { kind?: "deposit" | "withdrawal" | undefined; status?: string | undefined; }
+
 export interface PaymentRepository {
   getBalance(userId: string): Promise<Cents>;
   createDeposit(userId: string, amountCents: Cents, phone: string): Promise<string>;
@@ -23,16 +32,21 @@ export interface PaymentRepository {
   rejectWithdrawal(txId: string, adminId: string): Promise<{ reversed: boolean; newBalance: Cents }>;
   completeWithdrawal(txId: string, resultCode: number, conversationId: string | null, receipt: string | null, raw: unknown): Promise<CompleteResult>;
   getTransaction(txId: string): Promise<TxRow | null>;
+  /** A player's transaction history (optional kind/status filter), newest-first, cursor-paginated. */
+  listTransactions(userId: string, q: TxListQuery): Promise<Page<TransactionRecord>>;
 }
 
-interface MemTx { id: string; userId: string; kind: "deposit" | "withdrawal"; amount: Cents; status: string; phone: string; checkoutId?: string; }
+interface MemTx { id: string; userId: string; kind: "deposit" | "withdrawal"; amount: Cents; status: string; phone: string; checkoutId?: string; seq: number; createdAtMs: number; receipt: string | null; }
 interface MemLedger { userId: string; type: string; amount: Cents; ref: string; }
 
 export class InMemoryPaymentRepository implements PaymentRepository {
   private balances = new Map<string, Cents>();
   private txns = new Map<string, MemTx>();
   private byCheckout = new Map<string, string>();
+  private txSeq = 0;
   readonly ledger: MemLedger[] = [];
+
+  constructor(private readonly now: () => number = () => Date.now()) {}
 
   seed(userId: string, cents: Cents): void { this.balances.set(userId, assertCents(cents)); }
   async getBalance(userId: string): Promise<Cents> { return this.balances.get(userId) ?? 0; }
@@ -41,7 +55,7 @@ export class InMemoryPaymentRepository implements PaymentRepository {
     if (amountCents <= 0) throw new Error("INVALID_AMOUNT");
     if (!this.balances.has(userId)) throw new Error("WALLET_NOT_FOUND");
     const id = randomUUID();
-    this.txns.set(id, { id, userId, kind: "deposit", amount: amountCents, status: "pending", phone });
+    this.txns.set(id, { id, userId, kind: "deposit", amount: amountCents, status: "pending", phone, seq: ++this.txSeq, createdAtMs: this.now(), receipt: null });
     return id;
   }
   async attachStk(txId: string, _merchant: string, checkoutId: string): Promise<boolean> {
@@ -56,10 +70,9 @@ export class InMemoryPaymentRepository implements PaymentRepository {
     if (!tx) throw new Error("TX_NOT_FOUND");
     if (tx.status === "success" || tx.status === "failed") return { applied: false, status: tx.status, newBalance: await this.getBalance(tx.userId) };
     if (resultCode === 0) {
-      tx.status = "success";
+      tx.status = "success"; tx.receipt = receipt;
       const bal = (this.balances.get(tx.userId) ?? 0) + tx.amount; this.balances.set(tx.userId, bal);
       this.ledger.push({ userId: tx.userId, type: "deposit", amount: tx.amount, ref: `transactions:${tx.id}` });
-      void receipt;
       return { applied: true, status: "success", newBalance: bal };
     }
     tx.status = "failed";
@@ -74,7 +87,7 @@ export class InMemoryPaymentRepository implements PaymentRepository {
     if (bal < amountCents) throw new Error("INSUFFICIENT_FUNDS");
     const next = bal - amountCents; this.balances.set(userId, next);
     const id = randomUUID();
-    this.txns.set(id, { id, userId, kind: "withdrawal", amount: amountCents, status: "pending", phone });
+    this.txns.set(id, { id, userId, kind: "withdrawal", amount: amountCents, status: "pending", phone, seq: ++this.txSeq, createdAtMs: this.now(), receipt: null });
     this.ledger.push({ userId, type: "withdrawal", amount: -amountCents, ref: `transactions:${id}` });
     return { txId: id, newBalance: next };
   }
@@ -93,11 +106,11 @@ export class InMemoryPaymentRepository implements PaymentRepository {
     this.ledger.push({ userId: tx.userId, type: "withdrawal_reversal", amount: tx.amount, ref: `transactions:${tx.id}` });
     return { reversed: true, newBalance: bal };
   }
-  async completeWithdrawal(txId: string, resultCode: number, _conv: string | null, _receipt: string | null, _raw: unknown): Promise<CompleteResult> {
+  async completeWithdrawal(txId: string, resultCode: number, _conv: string | null, receipt: string | null, _raw: unknown): Promise<CompleteResult> {
     const tx = this.txns.get(txId);
     if (!tx || tx.kind !== "withdrawal") throw new Error("TX_NOT_FOUND");
     if (["success", "failed", "reversed"].includes(tx.status)) return { applied: false, status: tx.status, newBalance: await this.getBalance(tx.userId) };
-    if (resultCode === 0) { tx.status = "success"; return { applied: true, status: "success", newBalance: await this.getBalance(tx.userId) }; }
+    if (resultCode === 0) { tx.status = "success"; tx.receipt = receipt; return { applied: true, status: "success", newBalance: await this.getBalance(tx.userId) }; }
     tx.status = "failed";
     const bal = (this.balances.get(tx.userId) ?? 0) + tx.amount; this.balances.set(tx.userId, bal);
     this.ledger.push({ userId: tx.userId, type: "withdrawal_reversal", amount: tx.amount, ref: `transactions:${tx.id}` });
@@ -107,6 +120,34 @@ export class InMemoryPaymentRepository implements PaymentRepository {
     const tx = this.txns.get(txId);
     return tx ? { id: tx.id, userId: tx.userId, kind: tx.kind, amountCents: tx.amount, status: tx.status, phone: tx.phone } : null;
   }
+
+  async listTransactions(userId: string, q: TxListQuery): Promise<Page<TransactionRecord>> {
+    const limit = clampLimit(q.limit);
+    const after = numCursor(q.cursor);
+    const rows = [...this.txns.values()]
+      .filter((t) => t.userId === userId
+        && (q.kind === undefined || t.kind === q.kind)
+        && (q.status === undefined || t.status === q.status)
+        && (after === null || t.seq < after))
+      .sort((a, b) => b.seq - a.seq)
+      .slice(0, limit + 1);
+    const page = pageFrom(rows, limit, (t) => String(t.seq));
+    return {
+      items: page.items.map((t) => ({
+        id: t.id, kind: t.kind, amountCents: t.amount, status: t.status, provider: "mpesa",
+        phone: t.phone, mpesaReceipt: t.receipt, createdAtMs: t.createdAtMs,
+      })),
+      nextCursor: page.nextCursor,
+    };
+  }
+}
+
+/** Decode an in-memory (numeric-sequence) cursor; null if absent/malformed. */
+function numCursor(cursor?: string | null): number | null {
+  const t = decodeCursor(cursor);
+  if (t === null) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
 }
 
 const toCents = (v: unknown): Cents => (typeof v === "string" ? Number(v) : (v as number));
@@ -153,4 +194,26 @@ export class PgPaymentRepository implements PaymentRepository {
     const x = r.rows[0];
     return { id: String(x.id), userId: String(x.user_id), kind: x.kind, amountCents: toCents(x.amount), status: String(x.status), phone: String(x.phone) };
   }
+
+  async listTransactions(userId: string, q: TxListQuery): Promise<Page<TransactionRecord>> {
+    const limit = clampLimit(q.limit);
+    const cur = decodeKeyset(q.cursor);
+    const r = await this.q.query(
+      `select id, kind, amount, status, provider, phone, mpesa_receipt, created_at
+         from transactions
+        where user_id = $1
+          and ($2::text is null or kind = $2)
+          and ($3::text is null or status = $3)
+          and ($4::timestamptz is null or (created_at, id) < ($4::timestamptz, $5::uuid))
+        order by created_at desc, id desc
+        limit $6`,
+      [userId, q.kind ?? null, q.status ?? null, cur ? new Date(cur.tsMs).toISOString() : null, cur ? cur.id : null, limit + 1]);
+    const rows: TransactionRecord[] = r.rows.map((x) => ({
+      id: String(x.id), kind: x.kind as "deposit" | "withdrawal", amountCents: toCents(x.amount), status: String(x.status),
+      provider: String(x.provider ?? "mpesa"), phone: String(x.phone), mpesaReceipt: x.mpesa_receipt ?? null, createdAtMs: toMs(x.created_at),
+    }));
+    return pageFrom(rows, limit, (t) => `${t.createdAtMs}:${t.id}`);
+  }
 }
+
+const toMs = (v: unknown): number => (v instanceof Date ? v.getTime() : new Date(String(v)).getTime());

@@ -81,6 +81,6 @@ test("concurrent settle credits exactly once", async () => {
   const { position: p } = await gs.openPosition({ userId: "u6", stakeCents: 20000, direction: "buy" });
   clock.ms = p.expiresAtMs;
   await Promise.all([gs.step(), gs.step()]);
-  const credits = repo.ledger.filter((l) => l.type === "payout" && l.ref === `positions:${p.id}`);
+  const credits = repo.ledger.filter((l) => l.type === "payout" && l.refTable === "positions" && l.refId === p.id);
   assert.equal(credits.length, 1);
 });
