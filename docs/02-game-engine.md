@@ -79,12 +79,32 @@ Calibrating per direction neutralises the curve's visual green bias, so BUY and 
 `house_edge`, `max_multiplier`, `targetWinRate`, etc. are admin-configurable; a runtime RTP monitor
 compares realised vs target.
 
-## 4. Provable fairness (simple server seed, MVP)
-- Per game-day the engine commits `sha256(server_seed)` in advance and reveals `server_seed` later.
-- `value(t)` and the per-direction thresholds `τ_dir` derive solely from the committed seed, so given
-  the revealed seed + public `(entry_time, direction)` anyone can recompute the move, threshold and
-  exact outcome. (Client-seed mixing is a later upgrade.)
+## 4. Provable fairness — daily seed rotation (implemented)
+Implemented in `packages/shared/seed.ts` + `apps/engine/daycontext.ts` (`SeedManager`/`DayContext`),
+persisted via migration 0011 (`v_fairness`, `fn_ensure_game_day`, `fn_reveal_game_day`).
+
+- **Per-day seed from one master seed.** Each UTC trading day has its own server seed derived
+  deterministically from a single long-lived master seed:
+  ```
+  dateKey    = UTC "YYYY-MM-DD"
+  daySeed    = HMAC-SHA256(MASTER_SEED, "day:" + dateKey)   (hex)
+  commitment = SHA-256(daySeed)
+  ```
+- **Commit-then-reveal.** On entering a day the engine commits `commitment` to `game_days`
+  (`fn_ensure_game_day`, idempotent); the `daySeed` is revealed only after the day closes
+  (`fn_reveal_game_day`, which enforces *past-only* and verifies `server_seed_hash = sha256(seed)`).
+- **Leak-safe reads.** Clients read fairness through the `v_fairness` view, which shows the hash
+  always and the seed only after `revealed_at`. `game_days` itself has no public policy and the view
+  is `SELECT`-only for `anon`/`authenticated` (see migration 0011).
+- `value(t)` and the per-direction thresholds `τ_dir` derive solely from that day's seed, so given the
+  revealed seed + public `(entry_time, direction)` anyone can recompute the move, threshold and exact
+  outcome. (Client-seed mixing is a later upgrade.)
 - The committed outcome is **not** stored on the open position row, preventing pre-settle leakage.
+- **No secret at rest.** Because `daySeed` is recomputable from the master seed and the public
+  `dateKey`, the engine never needs to read a plaintext seed back from the database — it recomputes it
+  (this is what makes deterministic crash recovery possible; see §6).
+- **Rotation.** `SeedManager.rotate()` runs at the UTC boundary: it commits the new day's hash and
+  reveals the just-closed day's seed; the engine reads the active day synchronously on every tick.
 
 ## 5. Anti-abuse
 - Server-authoritative; client P&L is display-only and re-validated on settle.
@@ -92,3 +112,19 @@ compares realised vs target.
   (verified under concurrent attempts).
 - Min/max stake enforced; one open position per player (MVP) keeps accounting simple.
 - Losses cannot be cashed out early (edge integrity); responsible-gaming limits in docs/14.
+
+## 6. Crash recovery (deterministic, implemented)
+Implemented in `apps/engine/recovery.ts` (`RecoveryService`), run at engine boot before accepting
+traffic. The database — not engine memory — is the source of truth for open positions.
+
+`fn_open_position` persists the **engine-authoritative** `opened_at` (migration 0012), so `entryT`
+is reproducible exactly rather than depending on DB clock skew (a small skew near `τ` could otherwise
+flip a win/loss). On boot, for every position the DB still marks `open`:
+1. derive its day from the persisted `opened_at` (UTC) and rebuild that day's `DayContext`;
+2. **recompute** the committed outcome from the day seed (no secret read — recomputed);
+3. if expiry has passed → settle now (idempotent in the DB, keyed by `position_id`);
+   otherwise → re-arm it on the `GameServer` so it resumes live and auto-settles at its timer.
+
+Because outcomes are pure functions of `(masterSeed, dateKey, entryT, direction)`, recovered
+settlement is **identical** to the no-crash path. Verified by `recovery.test.ts` (settles expired,
+re-arms in-flight, idempotent on repeat — no double credit).

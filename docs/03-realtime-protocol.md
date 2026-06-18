@@ -6,8 +6,9 @@ Message envelope: JSON `{ "type": string, "data": object, "ts": epoch_ms }`.
 ## 1. Server → Client events
 | type | data | description |
 |------|------|-------------|
-| `hello` | `{ serverTime, gameConfig, serverSeedHash }` | sent on connect |
+| `hello` | `{ serverTime, gameConfig, serverSeedHash, tradeDate }` | sent on connect (`serverSeedHash`/`tradeDate` = the active UTC day's commitment) |
 | `tick` | `{ t, rate, delta }` | streaming price point (5–10/sec) |
+| `fairness` | `{ serverSeedHash, tradeDate }` | broadcast on UTC-day rotation (new day's commitment) |
 | `tick_batch` | `{ ticks: [...] }` | backfill last N ticks on connect |
 | `online` | `{ count }` | live online player count |
 | `position_opened` | `{ positionId, entryRate, entryT, direction, stake, duration }` | ack of an open |
@@ -45,3 +46,6 @@ client            engine
 - Heartbeat every 15s; disconnect → engine still auto-settles open positions at timer expiry.
 - On reconnect: `hello` + `tick_batch` + any pending `position_settled` replayed.
 - All money-moving events also written to Postgres; WS is a delivery channel, not the source of truth.
+- **Engine restart:** on boot the engine recovers every still-open position from Postgres —
+  settling those past expiry and re-arming in-flight ones — before accepting connections, so a crash
+  never strands an open position (see docs/02 §6).
