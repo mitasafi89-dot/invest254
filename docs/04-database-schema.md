@@ -150,17 +150,25 @@ create table affiliate_commissions (
   commission    bigint not null,          -- ggr * rate (cents)
   status        text not null default 'accrued'
                 check (status in ('accrued','paid','reversed')),
-  created_at    timestamptz default now()
+  created_at    timestamptz default now(),
+  payout_id     uuid references affiliate_payouts(id)  -- 0019: reservation link (NULL = available)
 );
 
 create table affiliate_payouts (
-  id            uuid primary key default gen_random_uuid(),
-  affiliate_id  uuid not null references affiliates(user_id),
-  amount        bigint not null,
-  status        text not null default 'requested'
-                check (status in ('requested','approved','paid','rejected')),
-  approved_by   uuid references profiles(id),
-  created_at    timestamptz default now()
+  id              uuid primary key default gen_random_uuid(),
+  affiliate_id    uuid not null references affiliates(user_id),
+  amount          bigint not null,
+  status          text not null default 'requested'
+                  check (status in ('requested','approved','paid','rejected')),
+  approved_by     uuid references profiles(id),
+  created_at      timestamptz default now(),
+  -- 0019: M-Pesa B2C audit (set as the payout moves approved -> paid/rejected)
+  paid_at         timestamptz,
+  conversation_id text,
+  mpesa_receipt   text,
+  result_code     int,
+  result_desc     text,
+  raw_callback    jsonb
 );
 ```
 

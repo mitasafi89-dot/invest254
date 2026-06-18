@@ -61,7 +61,10 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 | GET  | `/affiliate/summary` | marketer | ✅ referral link, total/active(7/30d) referrals, turnover, GGR, commission accrued/paid, available |
 | GET  | `/affiliate/referrals?cursor` | marketer | ✅ referred users (username, joinedAt, lifetime GGR); cursor-paginated |
 | GET  | `/affiliate/commissions?cursor` | marketer | ✅ daily commission history (period, GGR, commission, status); cursor-paginated |
-| POST | `/affiliate/payouts` | marketer | request payout of available commission |
+| POST | `/affiliate/payouts` | marketer | ✅ request payout of all available commission → `{ payoutId, amountCents }` (201). Reserves the covered accrued buckets (snapshot via `payout_id`); `NO_AVAILABLE_COMMISSION` (409) if nothing available, `PAYOUT_PENDING` (409) if one is already in flight |
+| POST | `/admin/affiliate/payouts/:id/approve` | finance_admin | ✅ requested → approved + dispatches M-Pesa **B2C** to the affiliate → `{ approved, conversationId? }`; idempotent (`approved:false` if not 'requested') |
+| POST | `/admin/affiliate/payouts/:id/reject` | finance_admin | ✅ requested → rejected (pre-dispatch), releases the reservation → `{ rejected }`; idempotent |
+| POST | `/affiliate/payouts/mpesa/result/:payoutId` | public (allowlisted) | ✅ Daraja B2C result callback. `:payoutId` is in the path (the per-payout ResultURL). Success ⇒ payout `paid` + reserved buckets accrued→paid; failure ⇒ `rejected` + reservation released. Acks like the STK/withdrawal callbacks |
 
 ## 6. Engagement
 | Method | Path | Auth | Notes |
@@ -130,6 +133,14 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
   turnover, GGR, commission accrued/paid, available), `GET /affiliate/referrals` and
   `GET /affiliate/commissions` (cursor-paginated) — marketer-gated, leak-safe aggregations over
   `affiliates`/`referrals`/`affiliate_commissions`/`positions`.
+- **Affiliate payouts (I4):** `POST /affiliate/payouts` (marketer request),
+  `POST /admin/affiliate/payouts/:id/approve|reject` (finance_admin), and the public
+  `POST /affiliate/payouts/mpesa/result/:payoutId` B2C callback. A payout reserves the covered
+  accrued commission buckets via `affiliate_commissions.payout_id` (available = accrued AND
+  `payout_id IS NULL`); approve dispatches M-Pesa B2C, the result marks the payout `paid`
+  (buckets accrued→paid) or `rejected` (reservation released). Migration-0019 RPCs
+  (`fn_affiliate_request_payout` / `_approve_payout` / `_complete_payout` / `_reject_payout`),
+  all idempotent under `FOR UPDATE`.
 - **Player + payments + admin (E2):** `/wallet`, `/chat` (GET/POST), `/deposits` +
   `/deposits/mpesa/callback`, `/withdrawals` + `/withdrawals/mpesa/result/:txId`,
   `/admin/withdrawals/:id/approve|reject`.
@@ -138,7 +149,6 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
   `positions` ⋈ `v_fairness` / `transactions`).
 
 Not yet implemented (no backing service, or owned elsewhere): full KYC (document upload),
-`/game/ticks`, REST position open/sell, the rest of affiliate M5 (commission accrual,
-marketer dashboard `/affiliate/summary|referrals|commissions`, payouts), promos/bonuses, admin
+`/game/ticks`, REST position open/sell, promos/bonuses, admin
 user/report/config/audit endpoints. Daraja IP allow-listing is an edge/infra concern, not
 enforced in-app.

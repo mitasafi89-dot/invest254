@@ -44,6 +44,13 @@ export interface ReferralRecord { username: string; joinedAtMs: number; lifetime
 /** One daily commission bucket as shown in the marketer's commission history. */
 export interface CommissionRecord { period: string; ggrCents: number; commissionCents: number; status: string; createdAtMs: number; }
 
+/** Result of a marketer payout request: the reserved amount + its payout id. */
+export interface PayoutRequestResult { payoutId: string; amountCents: number; }
+/** Result of an admin payout approval: the amount + the affiliate's phone for B2C dispatch. */
+export interface PayoutApproveResult { approved: boolean; amountCents: number | null; phone: string | null; }
+/** Result of applying an M-Pesa B2C payout result (idempotent). */
+export interface PayoutCompleteResult { applied: boolean; status: string; }
+
 export interface IdentityRepository {
   /**
    * Atomically create profile + wallet + credentials. An optional referral code (already
@@ -76,12 +83,26 @@ export interface AffiliateRepository {
   listReferrals(userId: string, q: PageQuery): Promise<Page<ReferralRecord>>;
   /** The affiliate's daily commission history (newest first, cursor-paginated). */
   listCommissions(userId: string, q: PageQuery): Promise<Page<CommissionRecord>>;
+  /**
+   * Marketer requests a payout of all currently-available commission. Snapshots (reserves) the
+   * covered accrued buckets onto the new payout. Throws NO_AVAILABLE_COMMISSION / PAYOUT_PENDING.
+   */
+  requestPayout(userId: string): Promise<PayoutRequestResult>;
+  /** Admin approves a 'requested' payout; returns amount + affiliate phone for B2C dispatch. Idempotent. */
+  approvePayout(payoutId: string, adminId: string): Promise<PayoutApproveResult>;
+  /**
+   * Apply the M-Pesa B2C result for a payout (idempotent): success => 'paid' (reserved buckets
+   * move accrued->paid); failure => 'rejected' (reservation released, buckets stay accrued).
+   */
+  completePayout(payoutId: string, resultCode: number, conversationId: string | null, receipt: string | null, resultDesc: string | null, raw: unknown): Promise<PayoutCompleteResult>;
+  /** Admin rejects a pre-dispatch ('requested') payout, releasing its reservation. Idempotent. */
+  rejectPayout(payoutId: string, adminId: string): Promise<boolean>;
 }
 
 /** Re-raise the bare error code the RPCs raise instead of the wrapped pg message. */
 function mapPgError(e: unknown): never {
   const msg = (e as { message?: string })?.message ?? String(e);
-  const m = msg.match(/(INVALID_PHONE|INVALID_USERNAME|INVALID_HASH|PHONE_TAKEN|USERNAME_TAKEN|REGISTRATION_CONFLICT|INVALID_NAME|INVALID_DOB|AGE_RESTRICTED|DOB_IMMUTABLE|USER_NOT_FOUND)/);
+  const m = msg.match(/(INVALID_PHONE|INVALID_USERNAME|INVALID_HASH|PHONE_TAKEN|USERNAME_TAKEN|REGISTRATION_CONFLICT|INVALID_NAME|INVALID_DOB|AGE_RESTRICTED|DOB_IMMUTABLE|USER_NOT_FOUND|NO_AVAILABLE_COMMISSION|PAYOUT_PENDING|PAYOUT_NOT_FOUND)/);
   throw new Error(m ? m[1] : msg);
 }
 
@@ -139,20 +160,49 @@ export class PgIdentityRepository implements IdentityRepository, AffiliateReposi
          (select coalesce(sum(c.ggr),0) from affiliate_commissions c where c.affiliate_id = a.user_id) as ggr,
          (select coalesce(sum(c.commission),0) from affiliate_commissions c where c.affiliate_id = a.user_id and c.status = 'accrued') as accrued,
          (select coalesce(sum(c.commission),0) from affiliate_commissions c where c.affiliate_id = a.user_id and c.status = 'paid') as paid,
-         (select coalesce(sum(ap.amount),0) from affiliate_payouts ap where ap.affiliate_id = a.user_id and ap.status in ('requested','approved')) as pending
+         (select coalesce(sum(c.commission),0) from affiliate_commissions c where c.affiliate_id = a.user_id and c.status = 'accrued' and c.payout_id is null) as available
        from affiliates a where a.user_id = $1`, [userId]);
     if (!r.rows.length) return null;
     const x = r.rows[0];
-    const accrued = Number(x.accrued);
-    const pending = Number(x.pending);
+    // commissionAccruedCents counts all accrued buckets (reserved or not); availableCents counts
+    // only unreserved ones (an in-flight payout snapshots its buckets via payout_id, excluding them).
     return {
       referralCode: String(x.referral_code), referralPath: `/r/${x.referral_code}`,
       commissionRate: Number(x.commission_rate), status: String(x.status),
       totalReferrals: Number(x.total_referrals), activePlayers7d: Number(x.active7), activePlayers30d: Number(x.active30),
       turnoverCents: Number(x.turnover), ggrCents: Number(x.ggr),
-      commissionAccruedCents: accrued, commissionPaidCents: Number(x.paid),
-      availableCents: Math.max(0, accrued - pending),
+      commissionAccruedCents: Number(x.accrued), commissionPaidCents: Number(x.paid),
+      availableCents: Number(x.available),
     };
+  }
+  async requestPayout(userId: string): Promise<PayoutRequestResult> {
+    try {
+      const r = await this.q.query("select payout_id, amount from fn_affiliate_request_payout($1)", [userId]);
+      const x = r.rows[0];
+      return { payoutId: String(x.payout_id), amountCents: Number(x.amount) };
+    } catch (e) { mapPgError(e); }
+  }
+  async approvePayout(payoutId: string, adminId: string): Promise<PayoutApproveResult> {
+    try {
+      const r = await this.q.query("select approved, amount, phone from fn_affiliate_approve_payout($1,$2)", [payoutId, adminId]);
+      const x = r.rows[0];
+      return { approved: Boolean(x.approved), amountCents: x.amount == null ? null : Number(x.amount), phone: x.phone == null ? null : String(x.phone) };
+    } catch (e) { mapPgError(e); }
+  }
+  async completePayout(payoutId: string, resultCode: number, conversationId: string | null, receipt: string | null, resultDesc: string | null, raw: unknown): Promise<PayoutCompleteResult> {
+    try {
+      const r = await this.q.query(
+        "select applied, status from fn_affiliate_complete_payout($1,$2,$3,$4,$5,$6)",
+        [payoutId, resultCode, conversationId, receipt, resultDesc, JSON.stringify(raw ?? {})]);
+      const x = r.rows[0];
+      return { applied: Boolean(x.applied), status: String(x.status) };
+    } catch (e) { mapPgError(e); }
+  }
+  async rejectPayout(payoutId: string, adminId: string): Promise<boolean> {
+    try {
+      const r = await this.q.query("select fn_affiliate_reject_payout($1,$2) as ok", [payoutId, adminId]);
+      return Boolean(r.rows[0]?.ok);
+    } catch (e) { mapPgError(e); }
   }
   async listReferrals(userId: string, q: PageQuery): Promise<Page<ReferralRecord>> {
     const limit = clampLimit(q.limit);
@@ -232,8 +282,9 @@ interface MemUser {
 
 interface MemAffiliate { userId: string; referralCode: string; commissionRate: number; status: string; }
 interface MemPlay { referredUser: string; period: string; stakeCents: number; payoutCents: number; openedAtMs: number; }
-interface MemCommission { id: number; affiliateId: string; referredUser: string; period: string; ggr: number; commission: number; status: string; createdAtMs: number; }
+interface MemCommission { id: number; affiliateId: string; referredUser: string; period: string; ggr: number; commission: number; status: string; createdAtMs: number; payoutId: string | null; }
 interface MemReferral { id: number; affiliateId: string; referredUser: string; createdAtMs: number; }
+interface MemPayout { id: string; affiliateId: string; amount: number; status: string; approvedBy: string | null; conversationId: string | null; receipt: string | null; resultCode: number | null; }
 
 /** In-memory identity store mirroring the RPC contracts (tests + dev). */
 export class InMemoryIdentityRepository implements IdentityRepository, AffiliateRepository {
@@ -245,6 +296,7 @@ export class InMemoryIdentityRepository implements IdentityRepository, Affiliate
   private readonly referrals: MemReferral[] = [];
   private readonly plays: MemPlay[] = [];
   private readonly commissions: MemCommission[] = [];
+  private readonly payouts = new Map<string, MemPayout>();              // payoutId -> payout
   private seq = 0;
   async register(phone: string, username: string, passwordHash: string, referralCode?: string): Promise<RegisteredUser> {
     if (phone.length < 8) throw new Error("INVALID_PHONE");
@@ -314,7 +366,7 @@ export class InMemoryIdentityRepository implements IdentityRepository, Affiliate
           if (existing.status !== "accrued") continue; // paid/reversed buckets are never re-touched
           existing.ggr = ggr; existing.commission = commission;
         } else {
-          this.commissions.push({ id: ++this.seq, affiliateId: affUserId, referredUser: ru, period, ggr, commission, status: "accrued", createdAtMs: Date.now() });
+          this.commissions.push({ id: ++this.seq, affiliateId: affUserId, referredUser: ru, period, ggr, commission, status: "accrued", createdAtMs: Date.now(), payoutId: null });
         }
         buckets += 1; total += commission;
       }
@@ -339,13 +391,14 @@ export class InMemoryIdentityRepository implements IdentityRepository, Affiliate
     const ggr = myCommissions.reduce((s, c) => s + c.ggr, 0);
     const accrued = myCommissions.filter((c) => c.status === "accrued").reduce((s, c) => s + c.commission, 0);
     const paid = myCommissions.filter((c) => c.status === "paid").reduce((s, c) => s + c.commission, 0);
-    const pending = this.pendingPayoutCents(userId);
+    // available = accrued buckets not yet reserved by an in-flight payout (payout_id snapshot).
+    const available = myCommissions.filter((c) => c.status === "accrued" && c.payoutId === null).reduce((s, c) => s + c.commission, 0);
     return {
       referralCode: aff.referralCode, referralPath: `/r/${aff.referralCode}`,
       commissionRate: aff.commissionRate, status: aff.status,
       totalReferrals: referred.length, activePlayers7d: activeWithin(7), activePlayers30d: activeWithin(30),
       turnoverCents: turnover, ggrCents: ggr,
-      commissionAccruedCents: accrued, commissionPaidCents: paid, availableCents: Math.max(0, accrued - pending),
+      commissionAccruedCents: accrued, commissionPaidCents: paid, availableCents: available,
     };
   }
   async listReferrals(userId: string, q: PageQuery): Promise<Page<ReferralRecord>> {
@@ -370,8 +423,48 @@ export class InMemoryIdentityRepository implements IdentityRepository, Affiliate
       }));
     return stripKeys(memPage(rows, q));
   }
-  /** Pending (requested/approved) payout reservation against accrued commission. Extended in I4. */
-  private pendingPayoutCents(_userId: string): number { return 0; }
+  async requestPayout(userId: string): Promise<PayoutRequestResult> {
+    for (const p of this.payouts.values()) {
+      if (p.affiliateId === userId && (p.status === "requested" || p.status === "approved")) throw new Error("PAYOUT_PENDING");
+    }
+    const reserved = this.commissions.filter((c) => c.affiliateId === userId && c.status === "accrued" && c.payoutId === null);
+    const amount = reserved.reduce((s, c) => s + c.commission, 0);
+    if (amount <= 0) throw new Error("NO_AVAILABLE_COMMISSION");
+    const id = randomUUID();
+    this.payouts.set(id, { id, affiliateId: userId, amount, status: "requested", approvedBy: null, conversationId: null, receipt: null, resultCode: null });
+    for (const c of reserved) c.payoutId = id;   // snapshot the covered buckets
+    return { payoutId: id, amountCents: amount };
+  }
+  async approvePayout(payoutId: string, adminId: string): Promise<PayoutApproveResult> {
+    const p = this.payouts.get(payoutId);
+    if (!p) throw new Error("PAYOUT_NOT_FOUND");
+    if (p.status !== "requested") return { approved: false, amountCents: null, phone: null };
+    p.status = "approved"; p.approvedBy = adminId;
+    return { approved: true, amountCents: p.amount, phone: this.byId.get(p.affiliateId)?.phone ?? null };
+  }
+  async completePayout(payoutId: string, resultCode: number, conversationId: string | null, receipt: string | null, _resultDesc: string | null, _raw: unknown): Promise<PayoutCompleteResult> {
+    const p = this.payouts.get(payoutId);
+    if (!p) throw new Error("PAYOUT_NOT_FOUND");
+    if (p.status === "paid" || p.status === "rejected") return { applied: false, status: p.status }; // terminal
+    if (p.status !== "approved") return { applied: false, status: p.status };                        // result only valid post-approval
+    p.conversationId = conversationId; p.receipt = receipt; p.resultCode = resultCode;
+    if (resultCode === 0) {
+      p.status = "paid";
+      for (const c of this.commissions) if (c.payoutId === payoutId && c.status === "accrued") c.status = "paid";
+      return { applied: true, status: "paid" };
+    }
+    p.status = "rejected";
+    for (const c of this.commissions) if (c.payoutId === payoutId && c.status === "accrued") c.payoutId = null; // release
+    return { applied: true, status: "rejected" };
+  }
+  async rejectPayout(payoutId: string, adminId: string): Promise<boolean> {
+    const p = this.payouts.get(payoutId);
+    if (!p) throw new Error("PAYOUT_NOT_FOUND");
+    if (p.status !== "requested") return false;
+    p.status = "rejected"; p.approvedBy = adminId;
+    for (const c of this.commissions) if (c.payoutId === payoutId && c.status === "accrued") c.payoutId = null; // release
+    return true;
+  }
   private toProfile(u: MemUser): ProfileRow {
     return {
       userId: u.userId, username: u.username, role: u.role, status: u.status,

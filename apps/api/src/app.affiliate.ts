@@ -1,6 +1,7 @@
 import { Router, ApiError, requireAuth, requireRole, type Ctx } from "./http.js";
 import type { PageQuery } from "@printpesa/engine";
 import type { ApiDeps } from "./app.js";
+import { parseB2cResult } from "./app.payments.js";
 
 /**
  * Affiliate routes:
@@ -13,12 +14,19 @@ import type { ApiDeps } from "./app.js";
 
 const BASE = "/api/v1";
 
+/** Daraja acknowledgement — any non-zero makes Safaricom retry, so callbacks always ack. */
+const DARAJA_ACK = { ResultCode: 0, ResultDesc: "Accepted" } as const;
+
 /** Affiliate domain-error code -> HTTP status. */
 const AFFILIATE_STATUS: Readonly<Record<string, number>> = {
   USER_NOT_FOUND: 404,
   NOT_FOUND: 404,
   NOT_AFFILIATE: 404,
   INVALID_PERIOD: 400,
+  PAYOUT_NOT_FOUND: 404,
+  NO_AVAILABLE_COMMISSION: 409,
+  PAYOUT_PENDING: 409,
+  B2C_UNAVAILABLE: 503,
 };
 
 /** Parse cursor pagination params from the query string (limit clamped by the repository). */
@@ -67,6 +75,26 @@ export function registerAffiliateRoutes(router: Router, deps: ApiDeps): void {
 
   router.get(`${BASE}/affiliate/commissions`, auth, marketer, async (ctx: Ctx) =>
     domain(() => deps.affiliate.listCommissions(ctx.claims!.userId, pageQuery(ctx))));
+
+  // ── Payouts (I4): marketer request → finance-admin approve/reject → M-Pesa B2C result ──
+  router.post(`${BASE}/affiliate/payouts`, auth, marketer, async (ctx: Ctx) =>
+    domain(async () => {
+      const r = await deps.affiliate.requestPayout(ctx.claims!.userId);
+      return { status: 201, body: { payoutId: r.payoutId, amountCents: r.amountCents } };
+    }));
+
+  router.post(`${BASE}/admin/affiliate/payouts/:id/approve`, auth, financeAdmin, async (ctx: Ctx) =>
+    domain(() => deps.affiliate.approvePayout(ctx.params.id!, ctx.claims!.userId)));
+
+  router.post(`${BASE}/admin/affiliate/payouts/:id/reject`, auth, financeAdmin, async (ctx: Ctx) =>
+    domain(async () => ({ rejected: await deps.affiliate.rejectPayout(ctx.params.id!, ctx.claims!.userId) })));
+
+  // Public: Daraja B2C result for a payout (network-allowlisted at the edge). Always acks.
+  router.post(`${BASE}/affiliate/payouts/mpesa/result/:payoutId`, async (ctx: Ctx) => {
+    const r = parseB2cResult(ctx.body);
+    await domain(() => deps.affiliate.completePayout(ctx.params.payoutId!, r.resultCode, r.conversationId, r.receipt, null, ctx.body));
+    return DARAJA_ACK;
+  });
 
   // Operational: run the daily revenue-share accrual for a trading day (idempotent). In
   // production a daily cron calls this (or the RPC directly via service role).

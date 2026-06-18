@@ -138,3 +138,93 @@ test("GET /affiliate/summary + referrals + commissions: marketer-gated dashboard
     assert.equal(coms.items[0].period, "2026-06-10");
   } finally { await api.close(); }
 });
+
+// ───────────────────────────────────────── payouts (I4) ─────────────────────────────────────
+
+/** Enroll a marketer + referred player, accrue one day, and return the marketer id + commission. */
+async function seedAccrued(api: TestApi): Promise<{ affId: string; commissionCents: number }> {
+  const affId = await register(api, "0712345678", "marketer");
+  const code: string = (await json(await req(api, "POST", "/api/v1/affiliate/enroll", { token: affId }))).referralCode;
+  const refId = await register(api, "0722333444", "referred", { referral_code: code });
+  api.identity.recordSettledPlay(refId, "2026-06-10", 10000, 2500); // GGR 7500 -> commission 1500
+  await req(api, "POST", "/api/v1/admin/affiliate/accrue", { token: `${affId}:finance_admin`, body: { date: "2026-06-10" } });
+  return { affId, commissionCents: 1500 };
+}
+
+/** Build a Daraja B2C Result payload (resultCode 0 = success). */
+function b2cResult(resultCode: number, conversationId = "conv-1", receipt = "RCT1") {
+  return {
+    Result: {
+      ResultCode: resultCode, ResultDesc: resultCode === 0 ? "Success" : "Failed", ConversationID: conversationId,
+      ResultParameters: { ResultParameter: [{ Key: "TransactionReceipt", Value: receipt }] },
+    },
+  };
+}
+
+test("payout lifecycle: marketer requests, finance-admin approves (B2C), B2C result marks paid", async () => {
+  const api = await startTestApi();
+  try {
+    const { affId, commissionCents } = await seedAccrued(api);
+
+    // marketer requests -> 201 with the reserved amount
+    const reqRes = await req(api, "POST", "/api/v1/affiliate/payouts", { token: `${affId}:marketer` });
+    assert.equal(reqRes.status, 201);
+    const payout = await json(reqRes);
+    assert.equal(payout.amountCents, commissionCents);
+    assert.equal(typeof payout.payoutId, "string");
+
+    // available drops to 0 while the payout is in flight; accrued unchanged
+    const s1 = await json(await req(api, "GET", "/api/v1/affiliate/summary", { token: `${affId}:marketer` }));
+    assert.equal(s1.commissionAccruedCents, commissionCents);
+    assert.equal(s1.availableCents, 0);
+
+    // a plain player cannot request a payout
+    const refToken = "0722333444"; // not a marketer
+    assert.equal((await req(api, "POST", "/api/v1/affiliate/payouts", { token: refToken })).status, 403);
+
+    // finance-admin approves -> B2C dispatched (stub conversation id)
+    const apprRes = await req(api, "POST", `/api/v1/admin/affiliate/payouts/${payout.payoutId}/approve`, { token: `${affId}:finance_admin` });
+    assert.equal(apprRes.status, 200);
+    const appr = await json(apprRes);
+    assert.equal(appr.approved, true);
+    assert.ok(appr.conversationId);
+
+    // a marketer cannot approve
+    assert.equal((await req(api, "POST", `/api/v1/admin/affiliate/payouts/${payout.payoutId}/approve`, { token: `${affId}:marketer` })).status, 403);
+
+    // Daraja B2C result (success) -> paid; callback always acks
+    const cbRes = await req(api, "POST", `/api/v1/affiliate/payouts/mpesa/result/${payout.payoutId}`, { body: b2cResult(0) });
+    assert.equal(cbRes.status, 200);
+    assert.equal((await json(cbRes)).ResultCode, 0);
+
+    const s2 = await json(await req(api, "GET", "/api/v1/affiliate/summary", { token: `${affId}:marketer` }));
+    assert.equal(s2.commissionPaidCents, commissionCents);
+    assert.equal(s2.commissionAccruedCents, 0);
+    assert.equal(s2.availableCents, 0);
+  } finally { await api.close(); }
+});
+
+test("payout: request with nothing available -> 409; reject releases the reservation", async () => {
+  const api = await startTestApi();
+  try {
+    // enrolled marketer with no accrued commission
+    const affId = await register(api, "0712345678", "marketer");
+    await req(api, "POST", "/api/v1/affiliate/enroll", { token: affId });
+    const empty = await req(api, "POST", "/api/v1/affiliate/payouts", { token: `${affId}:marketer` });
+    assert.equal(empty.status, 409);
+    assert.equal((await json(empty)).error.code, "NO_AVAILABLE_COMMISSION");
+
+    // now accrue + request, then admin rejects (pre-dispatch) -> availability restored
+    const refId = await register(api, "0722333444", "referred", { referral_code: (await json(await req(api, "POST", "/api/v1/affiliate/enroll", { token: affId }))).referralCode });
+    api.identity.recordSettledPlay(refId, "2026-06-10", 10000, 2500);
+    await req(api, "POST", "/api/v1/admin/affiliate/accrue", { token: `${affId}:finance_admin`, body: { date: "2026-06-10" } });
+    const payout = await json(await req(api, "POST", "/api/v1/affiliate/payouts", { token: `${affId}:marketer` }));
+
+    const rej = await req(api, "POST", `/api/v1/admin/affiliate/payouts/${payout.payoutId}/reject`, { token: `${affId}:finance_admin` });
+    assert.equal(rej.status, 200);
+    assert.equal((await json(rej)).rejected, true);
+
+    const s = await json(await req(api, "GET", "/api/v1/affiliate/summary", { token: `${affId}:marketer` }));
+    assert.equal(s.availableCents, 1500);  // released back to available
+  } finally { await api.close(); }
+});

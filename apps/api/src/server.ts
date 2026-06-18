@@ -66,7 +66,7 @@ async function buildDeps(): Promise<ApiDeps> {
     ...(process.env.SUPABASE_JWT_ISSUER ? { issuer: process.env.SUPABASE_JWT_ISSUER } : {}),
     ...(process.env.SUPABASE_JWT_AUD ? { audience: process.env.SUPABASE_JWT_AUD } : {}),
   });
-  const affiliate = new AffiliateService(identity);
+  const affiliate = new AffiliateService(identity, daraja);
 
   return {
     verifier,

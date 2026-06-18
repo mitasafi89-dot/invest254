@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { InMemoryIdentityRepository } from "./identity.js";
 import { AffiliateService } from "./affiliateservice.js";
 import { AuthService } from "./authservice.js";
+import { StubDarajaClient } from "./daraja.js";
 import { REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH } from "@printpesa/shared";
 
 const HASH = "scrypt$32768$8$1$abcdefghijklmnop$abcdefghijklmnop"; // length >= 20 (repo gate)
@@ -121,4 +122,92 @@ test("summary: NOT_AFFILIATE when the caller is not enrolled", async () => {
   const svc = new AffiliateService(repo);
   const u = await repo.register("254700000023", "plain", HASH);
   await assert.rejects(svc.summary(u.userId), /NOT_AFFILIATE/);
+});
+
+// ───────────────────────────────────────── payouts (I4) ─────────────────────────────────────
+
+/** Enroll a marketer with `cents` of accrued commission from one referred player on one day. */
+async function withAccrued(phoneSuffix: string, cents: number) {
+  const repo = new InMemoryIdentityRepository();
+  const svc = new AffiliateService(repo, new StubDarajaClient());
+  const aff = await repo.register(`2547010${phoneSuffix}`, `mk_${phoneSuffix}`, HASH);
+  const code = (await svc.enroll(aff.userId)).referralCode;
+  const ref = await repo.register(`2547020${phoneSuffix}`, `pl_${phoneSuffix}`, HASH, code);
+  // GGR g with rate 0.2 yields floor(0.2g) commission; pick g so commission == cents exactly.
+  repo.recordSettledPlay(ref.userId, "2026-06-10", cents * 5, 0);
+  await svc.accrueDaily("2026-06-10");
+  return { repo, svc, affId: aff.userId };
+}
+
+test("payout success: request reserves available, approve dispatches B2C, complete marks paid", async () => {
+  const { svc, affId } = await withAccrued("31", 2500);
+
+  const before = await svc.summary(affId);
+  assert.equal(before.commissionAccruedCents, 2500);
+  assert.equal(before.availableCents, 2500);
+
+  const req = await svc.requestPayout(affId);
+  assert.equal(req.amountCents, 2500);
+
+  // reserved: still accrued, but no longer available
+  const reserved = await svc.summary(affId);
+  assert.equal(reserved.commissionAccruedCents, 2500);
+  assert.equal(reserved.availableCents, 0);
+
+  // a second request while one is in flight is refused
+  await assert.rejects(svc.requestPayout(affId), /PAYOUT_PENDING/);
+
+  const appr = await svc.approvePayout(req.payoutId, "admin-1");
+  assert.equal(appr.approved, true);
+  assert.ok(appr.conversationId, "B2C dispatched -> conversation id");
+
+  // re-approve is a no-op (idempotent)
+  assert.equal((await svc.approvePayout(req.payoutId, "admin-1")).approved, false);
+
+  const comp = await svc.completePayout(req.payoutId, 0, "conv-1", "RCT1", "Success", {});
+  assert.deepEqual(comp, { applied: true, status: "paid" });
+
+  const after = await svc.summary(affId);
+  assert.equal(after.commissionPaidCents, 2500);
+  assert.equal(after.commissionAccruedCents, 0);
+  assert.equal(after.availableCents, 0);
+
+  // re-completing a terminal payout is a no-op
+  assert.deepEqual(await svc.completePayout(req.payoutId, 0, "conv-1", "RCT1", "Success", {}), { applied: false, status: "paid" });
+});
+
+test("payout failure: B2C result code != 0 rejects the payout and restores availability", async () => {
+  const { svc, affId } = await withAccrued("32", 1800);
+  const req = await svc.requestPayout(affId);
+  await svc.approvePayout(req.payoutId, "admin-1");
+
+  const comp = await svc.completePayout(req.payoutId, 1, "conv-2", null, "Insufficient funds", {});
+  assert.deepEqual(comp, { applied: true, status: "rejected" });
+
+  const after = await svc.summary(affId);
+  assert.equal(after.commissionPaidCents, 0);
+  assert.equal(after.availableCents, 1800);  // reservation released
+
+  // the affiliate can request again now that funds are back
+  const req2 = await svc.requestPayout(affId);
+  assert.equal(req2.amountCents, 1800);
+});
+
+test("payout reject: admin declines a pre-dispatch request and releases the reservation", async () => {
+  const { svc, affId } = await withAccrued("33", 900);
+  const req = await svc.requestPayout(affId);
+
+  assert.equal(await svc.rejectPayout(req.payoutId, "admin-1"), true);
+  assert.equal((await svc.summary(affId)).availableCents, 900);   // released
+
+  assert.equal(await svc.rejectPayout(req.payoutId, "admin-1"), false);            // idempotent
+  assert.equal((await svc.approvePayout(req.payoutId, "admin-1")).approved, false); // can't approve a rejected payout
+});
+
+test("payout: NO_AVAILABLE_COMMISSION when there is nothing to pay out", async () => {
+  const repo = new InMemoryIdentityRepository();
+  const svc = new AffiliateService(repo, new StubDarajaClient());
+  const aff = await repo.register("254701000099", "mk_empty", HASH);
+  await svc.enroll(aff.userId);
+  await assert.rejects(svc.requestPayout(aff.userId), /NO_AVAILABLE_COMMISSION/);
 });
