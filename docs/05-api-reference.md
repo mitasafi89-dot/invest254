@@ -24,9 +24,9 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 | Method | Path | Auth | Notes |
 |--------|------|------|------|
 | GET | `/wallet` | player | ✅ `{ real, bonus, currency }` |
-| GET | `/wallet/ledger?limit&cursor` | player | paginated ledger entries |
-| GET | `/positions?status&limit&cursor` | player | bet history |
-| GET | `/positions/:id` | player | single position incl. fairness data |
+| GET | `/wallet/ledger?limit&cursor` | player | ✅ cursor-paginated ledger → `{ items, nextCursor }` (newest-first) |
+| GET | `/positions?status&limit&cursor` | player | ✅ bet history (optional `status` filter) → `{ items, nextCursor }` |
+| GET | `/positions/:id` | player | ✅ single owned position incl. fairness (`:id` must be a UUID; 404 if not found/owned) |
 
 ## 3. Payments (M-Pesa)
 | Method | Path | Auth | Notes |
@@ -35,7 +35,7 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 | POST | `/deposits/mpesa/callback` | public (Daraja IP-allowlisted) | ✅ STK result callback; acks `{ ResultCode: 0, ResultDesc: "Accepted" }` |
 | POST | `/withdrawals` | player | ✅ `{ amount, phone }` → HOLDs funds; returns `{ transactionId, newBalance }` (202) |
 | POST | `/withdrawals/mpesa/result/:txId` | public (allowlisted) | ✅ B2C result callback. **`:txId` is in the path** — `fn_approve_withdrawal` does not persist `conversation_id`, so the per-payout ResultURL carries the txId; acks like the STK callback |
-| GET  | `/transactions?kind&status` | player | deposit/withdrawal history |
+| GET  | `/transactions?kind&status` | player | ✅ cursor-paginated deposit/withdrawal history → `{ items, nextCursor }` |
 
 > **Deviations from the original spec (implemented as above):** `/withdrawals` requires
 > `phone` (no profile-MSISDN lookup yet), and the B2C result path is `…/result/:txId`
@@ -91,7 +91,9 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 - Idempotency: deposits are idempotent by Daraja `CheckoutRequestID`; withdrawal results by
   transaction id (both enforced in the 0014 RPCs under `FOR UPDATE` + terminal-status guards).
   Other money-moving POSTs accept an `Idempotency-Key` header (planned).
-- Pagination: cursor-based (`?cursor=&limit=`), max 100.
+- Pagination: cursor-based (`?cursor=&limit=`, max 100, default 30). List responses are
+  `{ items, nextCursor }`, newest-first; pass `nextCursor` back as `cursor` for the next page
+  (`nextCursor: null` ends the list). Cursors are opaque — do not parse them.
 - Rate limits: OTP 1/30s & 5/hr/phone; chat 1/2s (per user, server-enforced); deposits 5/min.
 - Roles (hierarchical, higher satisfies lower): `player` < `marketer` < `support` <
   `finance_admin` < `super_admin`.
@@ -107,8 +109,11 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 - **Player + payments + admin (E2):** `/wallet`, `/chat` (GET/POST), `/deposits` +
   `/deposits/mpesa/callback`, `/withdrawals` + `/withdrawals/mpesa/result/:txId`,
   `/admin/withdrawals/:id/approve|reject`.
+- **Player history (F):** `/wallet/ledger`, `/positions`, `/positions/:id`, `/transactions`
+  (cursor-paginated, per-user isolated, backed by keyset reads over `ledger_entries` /
+  `positions` ⋈ `v_fairness` / `transactions`).
 
 Not yet implemented (no backing service, or owned elsewhere): OTP auth + `/me` (Supabase),
-`/wallet/ledger`, `/positions*`, `/transactions`, `/game/ticks`, REST position open/sell,
-affiliate (M5), promos/bonuses, admin user/report/config/audit endpoints. Daraja IP
-allow-listing is an edge/infra concern, not enforced in-app.
+`/game/ticks`, REST position open/sell, affiliate (M5), promos/bonuses, admin
+user/report/config/audit endpoints. Daraja IP allow-listing is an edge/infra concern, not
+enforced in-app.

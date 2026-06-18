@@ -59,7 +59,7 @@ via `node --test` — no build step required for dev.
 | `packages/shared` | `@printpesa/shared` | Pure, deterministic core: PRNG, curve, settlement, daily seed, money/payment helpers, chat filter, config/types |
 | `packages/db` | — | SQL migrations `0001–0014`: schema, RLS, atomic money/seed/fairness/payment RPCs |
 | `apps/engine` | `@printpesa/engine` | Authoritative WebSocket game server + reusable services (game, daily-seed rotation, crash recovery, engagement, payments). Importable, side-effect-free barrel; the WS process starts via `npm -w @printpesa/engine start` |
-| `apps/api` | `@printpesa/api` | REST transport (Node `http`) binding the engine services per [docs/05](docs/05-api-reference.md): public game/fairness/activity, player wallet/chat/payments, Daraja callbacks, finance-admin withdrawal moderation |
+| `apps/api` | `@printpesa/api` | REST transport (Node `http`) binding the engine services per [docs/05](docs/05-api-reference.md): public game/fairness/activity, player wallet/chat/payments + history (ledger, positions, transactions), Daraja callbacks, finance-admin withdrawal moderation |
 
 ```bash
 npm install                      # install workspaces
