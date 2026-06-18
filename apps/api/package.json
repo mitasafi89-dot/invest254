@@ -1,19 +1,18 @@
 {
-  "name": "@printpesa/engine",
+  "name": "@printpesa/api",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/server.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "start": "tsx src/server.ts"
   },
   "dependencies": {
     "@printpesa/shared": "0.1.0",
-    "ws": "^8.17.0",
+    "@printpesa/engine": "0.1.0",
     "pg": "^8.12.0"
   }
 }

@@ -1,0 +1,97 @@
+import { rtp, type GameConfig } from "@printpesa/shared";
+import type { FairnessRecord, ActivityRow } from "@printpesa/engine";
+import { Router, ApiError, serverFrom, type Ctx } from "./http.js";
+import type { Server } from "node:http";
+
+/**
+ * Dependencies the HTTP API binds to REST. Everything here is an already-implemented
+ * engine service/repository (or a thin read function over one); the API layer only adds
+ * routing, validation, auth and serialization. `server.ts` wires the production (Postgres)
+ * implementations; tests wire in-memory fakes. Player/payments/admin routes (E2) extend
+ * this interface — E1 ships the public surface (health, game config, fairness, activity).
+ */
+export interface ApiDeps {
+  /** JWT verifier for player/admin routes; null → DEV header auth (see requireAuth). */
+  verifier: import("@printpesa/engine").Verifier | null;
+  /** Public game configuration snapshot source. */
+  config: GameConfig;
+  /** Public fairness record for a game-day id (commitment always; seed only after reveal). */
+  fairnessById(gameDayId: number): Promise<FairnessRecord | null>;
+  /** Live activity feed (newest first). */
+  activity: { recent(limit: number): Promise<ActivityRow[]> };
+}
+
+const BASE = "/api/v1";
+
+// ─────────────────────────── DTOs ───────────────────────────
+
+function gameConfigDto(cfg: GameConfig) {
+  return {
+    currency: "KES",
+    minStakeCents: cfg.minStakeCents,
+    maxStakeCents: cfg.maxStakeCents,
+    maxMultiplier: cfg.maxMultiplier,
+    defaultDurationS: cfg.defaultDurationS,
+    tickRateMs: cfg.tickRateMs,
+    rtp: rtp(cfg),
+    timeframesS: [cfg.defaultDurationS],
+  };
+}
+
+function fairnessDto(r: FairnessRecord) {
+  return {
+    gameDayId: r.gameDayId,
+    tradeDate: r.tradeDate,
+    serverSeedHash: r.serverSeedHash,
+    serverSeed: r.serverSeed,   // null until the day is revealed
+    revealedAt: r.revealedAt,
+  };
+}
+
+function activityDto(r: ActivityRow) {
+  return { kind: r.kind, username: r.username, amountCents: r.amountCents, message: r.message, ts: r.createdAtMs };
+}
+
+/** Parse a `?limit=` query param, clamped to [1, max] with a default. */
+function parseLimit(ctx: Ctx, def: number, max = 100): number {
+  const raw = ctx.query.get("limit");
+  if (raw === null) return def;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) throw new ApiError("INVALID_LIMIT", "limit must be a positive integer", 400);
+  return Math.min(Math.floor(n), max);
+}
+
+// ─────────────────────────── routes ───────────────────────────
+
+/** Register the public (unauthenticated) routes — the E1 surface. */
+export function registerPublicRoutes(router: Router, deps: ApiDeps): void {
+  router.get(`${BASE}/health`, () => ({ status: "ok", time: new Date().toISOString() }));
+
+  router.get(`${BASE}/game/config`, () => gameConfigDto(deps.config));
+
+  router.get(`${BASE}/game/fairness/:gameDayId`, async (ctx) => {
+    const id = Number(ctx.params.gameDayId);
+    if (!Number.isInteger(id) || id <= 0) throw new ApiError("INVALID_ID", "gameDayId must be a positive integer", 400);
+    const rec = await deps.fairnessById(id);
+    if (!rec) throw new ApiError("NOT_FOUND", `no fairness record for game day ${id}`, 404);
+    return fairnessDto(rec);
+  });
+
+  router.get(`${BASE}/activity`, async (ctx) => {
+    const limit = parseLimit(ctx, 30);
+    const items = await deps.activity.recent(limit);
+    return { items: items.map(activityDto) };
+  });
+}
+
+/** Build the configured API router. */
+export function createRouter(deps: ApiDeps): Router {
+  const router = new Router();
+  registerPublicRoutes(router, deps);
+  return router;
+}
+
+/** Build the API HTTP server (not yet listening). */
+export function createApp(deps: ApiDeps): Server {
+  return serverFrom(createRouter(deps));
+}

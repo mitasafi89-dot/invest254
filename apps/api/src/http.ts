@@ -1,0 +1,196 @@
+import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
+import type { Verifier, AuthClaims } from "@printpesa/engine";
+
+/**
+ * A tiny, dependency-free HTTP router for the PrintPesa REST surface (docs/05). We use
+ * Node's built-in http server plus a typed path-pattern router rather than adding a web
+ * framework — the correctness lives in the engine services/RPCs, so the transport only
+ * needs routing, JSON (de)serialization, a uniform error envelope, and auth/role gates.
+ *
+ *   - Routes match `METHOD /path/:param` and expose `:param` values via `ctx.params`.
+ *   - Handlers return a plain value (=> 200 JSON) or a `{ status, body }` pair, or throw
+ *     `ApiError` for a controlled `{ error: { code, message } }` response.
+ *   - Middleware run before the handler and may populate `ctx` (e.g. `claims`) or throw.
+ */
+
+/** Controlled API failure → `{ error: { code, message } }` with an HTTP status. */
+export class ApiError extends Error {
+  constructor(public readonly code: string, message: string, public readonly status = 400) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export interface Ctx {
+  readonly req: IncomingMessage;
+  readonly res: ServerResponse;
+  readonly method: string;
+  readonly path: string;
+  readonly params: Record<string, string>;
+  readonly query: URLSearchParams;
+  /** Parsed JSON body for non-GET requests (null if absent/empty). */
+  body: unknown;
+  /** Set by `requireAuth` once a caller is authenticated. */
+  claims?: AuthClaims;
+}
+
+export interface HandlerResult { status?: number; body: unknown; }
+export type Handler = (ctx: Ctx) => Promise<HandlerResult | unknown> | HandlerResult | unknown;
+export type Middleware = (ctx: Ctx) => Promise<void> | void;
+
+interface Route { method: string; regex: RegExp; keys: string[]; chain: Array<Middleware | Handler>; }
+
+/** Role hierarchy — higher rank satisfies any lower minimum (see docs/05 §7). */
+export const ROLE_RANK: Readonly<Record<string, number>> = {
+  player: 1,
+  marketer: 2,
+  support: 3,
+  finance_admin: 4,
+  super_admin: 5,
+};
+
+const MAX_BODY_BYTES = 1_000_000; // 1 MB cap on request bodies
+
+function compile(path: string): { regex: RegExp; keys: string[] } {
+  const keys: string[] = [];
+  const pattern = path
+    .split("/")
+    .map((seg) => {
+      if (seg.startsWith(":")) { keys.push(seg.slice(1)); return "([^/]+)"; }
+      return seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    })
+    .join("/");
+  return { regex: new RegExp(`^${pattern}/?$`), keys };
+}
+
+export class Router {
+  private readonly routes: Route[] = [];
+
+  private add(method: string, path: string, chain: Array<Middleware | Handler>): this {
+    const { regex, keys } = compile(path);
+    this.routes.push({ method, regex, keys, chain });
+    return this;
+  }
+  // Last argument is the handler; any preceding arguments are middleware.
+  get(path: string, ...chain: Array<Middleware | Handler>): this { return this.add("GET", path, chain); }
+  post(path: string, ...chain: Array<Middleware | Handler>): this { return this.add("POST", path, chain); }
+  patch(path: string, ...chain: Array<Middleware | Handler>): this { return this.add("PATCH", path, chain); }
+  put(path: string, ...chain: Array<Middleware | Handler>): this { return this.add("PUT", path, chain); }
+  del(path: string, ...chain: Array<Middleware | Handler>): this { return this.add("DELETE", path, chain); }
+
+  /** Build a Node request listener that dispatches to the registered routes. */
+  listener(): (req: IncomingMessage, res: ServerResponse) => void {
+    return (req, res) => { void this.handle(req, res); };
+  }
+
+  private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const method = (req.method ?? "GET").toUpperCase();
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const path = url.pathname;
+    try {
+      let matchedPath = false;
+      for (const route of this.routes) {
+        const m = route.regex.exec(path);
+        if (!m) continue;
+        matchedPath = true;
+        if (route.method !== method) continue;
+
+        const params: Record<string, string> = {};
+        route.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1]!); });
+        const ctx: Ctx = {
+          req, res, method, path, params, query: url.searchParams,
+          body: method === "GET" || method === "HEAD" ? null : await readJson(req),
+        };
+
+        let result: unknown;
+        for (const step of route.chain) {
+          const out = await step(ctx);
+          // Only the final handler produces a response value; middleware return void.
+          if (step === route.chain[route.chain.length - 1]) result = out;
+        }
+        return writeResult(res, result);
+      }
+      // Path exists but method does not → 405; otherwise 404.
+      if (matchedPath) throw new ApiError("METHOD_NOT_ALLOWED", `${method} not allowed on ${path}`, 405);
+      throw new ApiError("NOT_FOUND", `no route for ${method} ${path}`, 404);
+    } catch (err) {
+      writeError(res, err);
+    }
+  }
+}
+
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of req) {
+    const buf = c as Buffer;
+    size += buf.length;
+    if (size > MAX_BODY_BYTES) throw new ApiError("PAYLOAD_TOO_LARGE", "request body too large", 413);
+    chunks.push(buf);
+  }
+  if (size === 0) return null;
+  const text = Buffer.concat(chunks).toString("utf8").trim();
+  if (!text) return null;
+  try { return JSON.parse(text); }
+  catch { throw new ApiError("BAD_JSON", "request body is not valid JSON", 400); }
+}
+
+function writeResult(res: ServerResponse, result: unknown): void {
+  if (result && typeof result === "object" && "body" in (result as HandlerResult)) {
+    const r = result as HandlerResult;
+    return sendJson(res, r.status ?? 200, r.body);
+  }
+  sendJson(res, 200, result ?? {});
+}
+
+function writeError(res: ServerResponse, err: unknown): void {
+  if (err instanceof ApiError) return sendJson(res, err.status, { error: { code: err.code, message: err.message } });
+  const message = err instanceof Error ? err.message : String(err);
+  sendJson(res, 500, { error: { code: "INTERNAL", message } });
+}
+
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  if (res.headersSent) return;
+  const payload = JSON.stringify(body);
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  res.end(payload);
+}
+
+// ─────────────────────────── middleware ───────────────────────────
+
+/**
+ * Authenticate the caller from `Authorization: Bearer <jwt>`. When a `verifier` is
+ * configured the token is cryptographically verified (Supabase JWT). When it is null the
+ * service runs in DEV mode and trusts `X-User-Id`/`X-User-Role` headers — never for prod.
+ */
+export function requireAuth(verifier: Verifier | null): Middleware {
+  return async (ctx) => {
+    const header = ctx.req.headers["authorization"];
+    const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    if (verifier) {
+      if (!token) throw new ApiError("AUTH_REQUIRED", "missing bearer token", 401);
+      try { ctx.claims = await verifier(token); }
+      catch { throw new ApiError("AUTH_INVALID", "invalid or expired token", 401); }
+    } else {
+      const uid = ctx.req.headers["x-user-id"];
+      if (typeof uid !== "string" || !uid) throw new ApiError("AUTH_REQUIRED", "missing X-User-Id (dev auth)", 401);
+      const role = ctx.req.headers["x-user-role"];
+      ctx.claims = { userId: uid, role: typeof role === "string" ? role : "player", raw: {} };
+    }
+  };
+}
+
+/** Gate a route to callers whose role meets `minRole` in the hierarchy. Run after requireAuth. */
+export function requireRole(minRole: keyof typeof ROLE_RANK): Middleware {
+  return (ctx) => {
+    if (!ctx.claims) throw new ApiError("AUTH_REQUIRED", "authentication required", 401);
+    const have = ROLE_RANK[ctx.claims.role ?? "player"] ?? 0;
+    const need = ROLE_RANK[minRole] ?? Number.POSITIVE_INFINITY;
+    if (have < need) throw new ApiError("FORBIDDEN", `requires role ${minRole}`, 403);
+  };
+}
+
+/** Convenience: construct the Node server from a configured router. */
+export function serverFrom(router: Router): Server {
+  return createServer(router.listener());
+}
