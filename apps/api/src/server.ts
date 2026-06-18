@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG } from "@printpesa/shared";
 import {
-  PgGameRepository, PgEngagementRepository, PgPaymentRepository,
-  PaymentService, ChatService, ActivityService, makeDarajaClient, makeVerifier, maskHandle,
+  PgGameRepository, PgEngagementRepository, PgPaymentRepository, PgIdentityRepository,
+  PaymentService, ChatService, ActivityService, AuthService, makeDarajaClient, makeVerifier, maskHandle,
   type GameRepository, type EngagementRepository, type PaymentRepository,
   type Querier, type FairnessRecord,
 } from "@printpesa/engine";
@@ -54,8 +54,21 @@ async function buildDeps(): Promise<ApiDeps> {
 
   const chat = new ChatService(engage);
 
+  // Self-managed auth issues HS256 tokens signed with SUPABASE_JWT_SECRET — the same secret
+  // makeVerifier checks. Asymmetric (JWKS) verification can't verify our self-issued tokens.
+  const jwtSecret = process.env.SUPABASE_JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("AUTH: SUPABASE_JWT_SECRET is required for self-managed register/login (HS256 issuance)");
+  }
+  const auth = new AuthService(new PgIdentityRepository(q), {
+    jwtSecret,
+    ...(process.env.SUPABASE_JWT_ISSUER ? { issuer: process.env.SUPABASE_JWT_ISSUER } : {}),
+    ...(process.env.SUPABASE_JWT_AUD ? { audience: process.env.SUPABASE_JWT_AUD } : {}),
+  });
+
   return {
     verifier,
+    auth,
     config: DEFAULT_CONFIG,
     fairnessById: async (gameDayId: number): Promise<FairnessRecord | null> => {
       const r = await q.query(

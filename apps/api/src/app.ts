@@ -1,11 +1,12 @@
 import { rtp, type GameConfig, type Cents } from "@printpesa/shared";
 import type {
-  FairnessRecord, ActivityRow, ChatRow, ChatPostResult, PaymentService, Verifier,
+  FairnessRecord, ActivityRow, ChatRow, ChatPostResult, PaymentService, AuthService, Verifier,
   Page, PageQuery, LedgerEntry, PositionRecord, PositionDetail, PositionListQuery, TransactionRecord, TxListQuery,
 } from "@printpesa/engine";
 import { Router, ApiError, serverFrom, type Ctx } from "./http.js";
 import { registerProtectedRoutes } from "./app.payments.js";
 import { registerHistoryRoutes } from "./app.history.js";
+import { registerAuthRoutes } from "./app.auth.js";
 import type { Server } from "node:http";
 
 /**
@@ -20,6 +21,8 @@ export interface WalletBalance { real: Cents; bonus: Cents; currency: string; }
 export interface ApiDeps {
   /** JWT verifier for player/admin routes; null → DEV header auth (see requireAuth). */
   verifier: Verifier | null;
+  /** Self-managed phone+password auth: register/login issue tokens the verifier accepts (G3/G4). */
+  auth: Pick<AuthService, "register" | "login">;
   /** Public game configuration snapshot source. */
   config: GameConfig;
   /** Public fairness record for a game-day id (commitment always; seed only after reveal). */
@@ -112,6 +115,7 @@ export function registerPublicRoutes(router: Router, deps: ApiDeps): void {
 export function createRouter(deps: ApiDeps): Router {
   const router = new Router();
   registerPublicRoutes(router, deps);
+  registerAuthRoutes(router, deps);
   registerProtectedRoutes(router, deps);
   registerHistoryRoutes(router, deps);
   return router;

@@ -1,0 +1,83 @@
+import { Router, ApiError, requireAuth, type Ctx } from "./http.js";
+import type { ApiDeps } from "./app.js";
+
+/**
+ * Auth routes (Issue G4): self-managed phone + password registration / login and the
+ * authenticated `/me` echo. Thin transport over the engine AuthService (G3) — scrypt
+ * hashing, the atomic 0015 register RPC, the active-status gate and HS256 JWT issuance all
+ * live there. This module only parses/validates input, maps domain error codes to HTTP
+ * statuses, and serializes the session. Issued tokens are verified by the same
+ * `makeVerifier` the protected routes already use, so no other route changes.
+ */
+
+const BASE = "/api/v1";
+
+/** Auth domain-error code -> HTTP status (PASSWORD_ and USERNAME_ suffixes handled by prefix). */
+const AUTH_STATUS: Readonly<Record<string, number>> = {
+  INVALID_PHONE: 400,
+  PHONE_TAKEN: 409,
+  USERNAME_TAKEN: 409,
+  REGISTRATION_CONFLICT: 409,
+  INVALID_CREDENTIALS: 401,
+  ACCOUNT_SUSPENDED: 403,
+  ACCOUNT_BANNED: 403,
+};
+
+function statusFor(code: string): number {
+  if (AUTH_STATUS[code]) return AUTH_STATUS[code]!;
+  if (code.startsWith("PASSWORD_") || code.startsWith("USERNAME_")) return 400;
+  return 0; // unknown → let the router map to 500
+}
+
+/** Run an AuthService call, translating its thrown error codes into controlled ApiErrors. */
+async function domain<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    const code = message.split(":")[0]!.trim(); // normalizeMsisdn throws "INVALID_PHONE: <input>"
+    const status = statusFor(code);
+    if (status) throw new ApiError(code, message, status);
+    throw err;
+  }
+}
+
+function asObject(body: unknown): Record<string, unknown> {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new ApiError("VALIDATION", "JSON object body required", 400);
+  return body as Record<string, unknown>;
+}
+
+function requireString(body: Record<string, unknown>, key: string): string {
+  const v = body[key];
+  if (typeof v !== "string" || v.length === 0) throw new ApiError("VALIDATION", `${key} must be a non-empty string`, 400);
+  return v;
+}
+
+/** Register the auth routes (register/login are public; /me requires a bearer token). */
+export function registerAuthRoutes(router: Router, deps: ApiDeps): void {
+  const auth = requireAuth(deps.verifier);
+
+  router.post(`${BASE}/auth/register`, async (ctx: Ctx) => {
+    const body = asObject(ctx.body);
+    const phone = requireString(body, "phone");
+    const username = requireString(body, "username");
+    const password = requireString(body, "password");
+    const s = await domain(() => deps.auth.register({ phone, username, password }));
+    return { status: 201, body: { token: s.token, userId: s.userId, role: s.role } };
+  });
+
+  router.post(`${BASE}/auth/login`, async (ctx: Ctx) => {
+    const body = asObject(ctx.body);
+    const phone = requireString(body, "phone");
+    const password = requireString(body, "password");
+    const s = await domain(() => deps.auth.login({ phone, password }));
+    return { token: s.token, userId: s.userId, role: s.role };
+  });
+
+  router.get(`${BASE}/auth/me`, auth, async (ctx: Ctx) => {
+    const userId = ctx.claims!.userId;
+    const username = await deps.resolveHandle(userId);
+    return { userId, role: ctx.claims!.role ?? "player", username };
+  });
+}
