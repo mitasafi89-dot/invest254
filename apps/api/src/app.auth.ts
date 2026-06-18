@@ -21,11 +21,16 @@ const AUTH_STATUS: Readonly<Record<string, number>> = {
   INVALID_CREDENTIALS: 401,
   ACCOUNT_SUSPENDED: 403,
   ACCOUNT_BANNED: 403,
+  AGE_RESTRICTED: 403,
+  DOB_IMMUTABLE: 409,
+  INVALID_DOB: 400,
+  USER_NOT_FOUND: 404,
+  NOT_FOUND: 404,
 };
 
 function statusFor(code: string): number {
   if (AUTH_STATUS[code]) return AUTH_STATUS[code]!;
-  if (code.startsWith("PASSWORD_") || code.startsWith("USERNAME_")) return 400;
+  if (code.startsWith("PASSWORD_") || code.startsWith("USERNAME_") || code.startsWith("NAME_") || code.startsWith("DOB_")) return 400;
   return 0; // unknown → let the router map to 500
 }
 
@@ -77,7 +82,31 @@ export function registerAuthRoutes(router: Router, deps: ApiDeps): void {
 
   router.get(`${BASE}/auth/me`, auth, async (ctx: Ctx) => {
     const userId = ctx.claims!.userId;
-    const username = await deps.resolveHandle(userId);
-    return { userId, role: ctx.claims!.role ?? "player", username };
+    // Tolerate callers that aren't a self-managed identity (e.g. DEV header auth): fall back to claims.
+    const profile = await deps.auth.me(userId).catch((e) => {
+      if (e instanceof Error && e.message === "NOT_FOUND") return null;
+      throw e;
+    });
+    const username = profile?.username ?? (await deps.resolveHandle(userId));
+    return {
+      userId,
+      role: profile?.role ?? ctx.claims!.role ?? "player",
+      username,
+      fullName: profile?.fullName ?? null,
+      dateOfBirth: profile?.dateOfBirth ?? null,
+      kycStatus: profile?.kycStatus ?? "none",
+      ageVerified: profile?.ageVerified ?? false,
+    };
+  });
+
+  router.patch(`${BASE}/auth/me`, auth, async (ctx: Ctx) => {
+    const body = asObject(ctx.body);
+    const fullName = requireString(body, "full_name");
+    const dateOfBirth = requireString(body, "date_of_birth");
+    const p = await domain(() => deps.auth.completeBasicProfile(ctx.claims!.userId, { fullName, dateOfBirth }));
+    return {
+      userId: p.userId, role: p.role, username: p.username,
+      fullName: p.fullName, dateOfBirth: p.dateOfBirth, kycStatus: p.kycStatus, ageVerified: p.ageVerified,
+    };
   });
 }

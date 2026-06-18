@@ -21,8 +21,8 @@ export interface WalletBalance { real: Cents; bonus: Cents; currency: string; }
 export interface ApiDeps {
   /** JWT verifier for player/admin routes; null → DEV header auth (see requireAuth). */
   verifier: Verifier | null;
-  /** Self-managed phone+password auth: register/login issue tokens the verifier accepts (G3/G4). */
-  auth: Pick<AuthService, "register" | "login">;
+  /** Self-managed phone+password auth + basic-KYC profile (G3/G4/H1). */
+  auth: Pick<AuthService, "register" | "login" | "me" | "completeBasicProfile">;
   /** Public game configuration snapshot source. */
   config: GameConfig;
   /** Public fairness record for a game-day id (commitment always; seed only after reveal). */

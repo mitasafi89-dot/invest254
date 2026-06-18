@@ -29,10 +29,15 @@ the engine self-issues JWTs the existing verifier already trusts.
 - Referral attribution and welcome bonus on first registration are planned (the `referred_by`
   column already exists; wire-up tracked with the affiliate milestone).
 
-## 2. Age-gate & basic KYC (MVP)
-- On first session the user must submit `full_name` + `date_of_birth`.
-- **Age check:** DOB must be ≥18 years before deposit/play is allowed; under-18 → blocked + flagged.
-- `kyc_status='basic'` once name + DOB present.
+## 2. Age-gate & basic KYC (MVP, implemented)
+- `PATCH /auth/me { full_name, date_of_birth }` records the profile via `fn_set_basic_profile`
+  (migration 0016) and sets `kyc_status='basic'`. `date_of_birth` is **immutable once set**.
+- **Age check:** DOB must be ≥18; under-18 submissions are rejected (`AGE_RESTRICTED`) and the DOB
+  is never persisted. New rows default to `kyc_status='none'`.
+- **Enforcement is un-bypassable:** real-money deposit and opening a position both require a stored
+  DOB ≥18, checked at transaction time inside the `SECURITY DEFINER` money RPCs
+  (`fn_create_deposit` / `fn_open_position`); unverified callers get `AGE_NOT_VERIFIED`. Because
+  age is time-dependent it is computed at transaction time, not stored as a static flag.
 - Phone is the unique login identity (one account per phone, enforced by `fn_register_user`).
   SMS proof-of-possession of the number can be layered on later without changing the credential model.
 

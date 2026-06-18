@@ -15,8 +15,8 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 |--------|------|------|--------------|
 | POST | `/auth/register` | public | ✅ `{ phone, username, password }` → `{ token, userId, role }` (201); atomically creates profile+wallet+credentials |
 | POST | `/auth/login` | public | ✅ `{ phone, password }` → `{ token, userId, role }`; generic `INVALID_CREDENTIALS`, active-status gated |
-| GET  | `/auth/me` | player | ✅ `{ userId, role, username }` derived from the verified token |
-| PATCH| `/me` | player | `{ full_name, date_of_birth }` (basic KYC, age-gate ≥18) |
+| GET  | `/auth/me` | player | ✅ `{ userId, role, username, fullName, dateOfBirth, kycStatus, ageVerified }` |
+| PATCH| `/auth/me` | player | ✅ `{ full_name, date_of_birth }` → basic KYC (age-gate ≥18; DOB immutable once set) |
 
 ## 2. Wallet & history
 | Method | Path | Auth | Notes |
@@ -34,6 +34,11 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 | POST | `/withdrawals` | player | ✅ `{ amount, phone }` → HOLDs funds; returns `{ transactionId, newBalance }` (202) |
 | POST | `/withdrawals/mpesa/result/:txId` | public (allowlisted) | ✅ B2C result callback. **`:txId` is in the path** — `fn_approve_withdrawal` does not persist `conversation_id`, so the per-payout ResultURL carries the txId; acks like the STK callback |
 | GET  | `/transactions?kind&status` | player | ✅ cursor-paginated deposit/withdrawal history → `{ items, nextCursor }` |
+
+> **Age gate:** `/deposits` and opening a position require an age-verified adult (a stored
+> `date_of_birth` ≥ 18 years). The check is enforced at the `SECURITY DEFINER` money RPCs
+> (`fn_create_deposit` / `fn_open_position`, migration 0016) and is un-bypassable; unverified
+> callers get `AGE_NOT_VERIFIED` (403). Complete basic KYC via `PATCH /auth/me` first.
 
 > **Deviations from the original spec (implemented as above):** `/withdrawals` requires
 > `phone` (no profile-MSISDN lookup yet), and the B2C result path is `…/result/:txId`
@@ -97,9 +102,11 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 - Roles (hierarchical, higher satisfies lower): `player` < `marketer` < `support` <
   `finance_admin` < `super_admin`.
 - Error codes used by the implemented surface: `AUTH_REQUIRED`/`AUTH_INVALID`/`INVALID_CREDENTIALS` (401),
-  `FORBIDDEN`/`ACCOUNT_SUSPENDED`/`ACCOUNT_BANNED` (403), `NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405),
+  `FORBIDDEN`/`ACCOUNT_SUSPENDED`/`ACCOUNT_BANNED`/`AGE_RESTRICTED`/`AGE_NOT_VERIFIED` (403),
+  `NOT_FOUND`/`USER_NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405),
   `VALIDATION`/`BAD_JSON`/`INVALID_ID`/`INVALID_LIMIT`/`BAD_CALLBACK`/`INVALID_AMOUNT`/`BELOW_MIN`/
-  `INVALID_PHONE`/`PASSWORD_*`/`USERNAME_*` (400), `PHONE_TAKEN`/`USERNAME_TAKEN`/`REGISTRATION_CONFLICT` (409),
+  `INVALID_PHONE`/`INVALID_DOB`/`PASSWORD_*`/`USERNAME_*`/`NAME_*`/`DOB_*` (400),
+  `PHONE_TAKEN`/`USERNAME_TAKEN`/`REGISTRATION_CONFLICT`/`DOB_IMMUTABLE` (409),
   `RATE_LIMITED` (429), `REJECTED` (422), `INSUFFICIENT_FUNDS` (402), `PAYLOAD_TOO_LARGE` (413),
   `INTERNAL` (500). Daraja callbacks always ack `{ ResultCode: 0, ResultDesc: "Accepted" }`.
 
@@ -107,7 +114,10 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 `apps/api` (Node `http`, default `PORT=8081`) currently ships:
 - **Public (E1):** `/health`, `/game/config`, `/game/fairness/:gameDayId`, `/activity`.
 - **Auth (G):** `/auth/register`, `/auth/login` (self-managed phone+password, no OTP; scrypt +
-  self-issued HS256 JWT) and `/auth/me`. See [06 — Authentication & KYC](06-auth-kyc.md).
+  self-issued HS256 JWT), `/auth/me` (GET profile+KYC, PATCH basic KYC). See
+  [06 — Authentication & KYC](06-auth-kyc.md).
+- **Age gate (H1):** real-money deposit/play requires an age-verified adult (≥18), enforced at
+  the money RPCs (`fn_create_deposit` / `fn_open_position`, migration 0016).
 - **Player + payments + admin (E2):** `/wallet`, `/chat` (GET/POST), `/deposits` +
   `/deposits/mpesa/callback`, `/withdrawals` + `/withdrawals/mpesa/result/:txId`,
   `/admin/withdrawals/:id/approve|reject`.
@@ -115,7 +125,7 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
   (cursor-paginated, per-user isolated, backed by keyset reads over `ledger_entries` /
   `positions` ⋈ `v_fairness` / `transactions`).
 
-Not yet implemented (no backing service, or owned elsewhere): `PATCH /me` basic-KYC/age-gate,
+Not yet implemented (no backing service, or owned elsewhere): full KYC (document upload),
 `/game/ticks`, REST position open/sell, affiliate (M5), promos/bonuses, admin
 user/report/config/audit endpoints. Daraja IP allow-listing is an edge/infra concern, not
 enforced in-app.

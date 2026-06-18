@@ -28,6 +28,7 @@ Idempotent, dependency-ordered SQL migrations for the PrintPesa Supabase Postgre
 | 0013_seed_engagement.sql | Seed ≥500 simulated `activity_feed` + ≥500 `chat_messages` (deterministic, idempotent; `is_simulated=true` / `user_id IS NULL`) |
 | 0014_payment_rpcs.sql | Atomic + idempotent M-Pesa RPCs: deposit (`fn_create_deposit`/`fn_attach_stk`/`fn_complete_deposit`) and withdrawal (`fn_create_withdrawal` hold, `fn_approve_withdrawal`, `fn_reject_withdrawal`, `fn_complete_withdrawal` with reversal) — service-role only |
 | 0015_self_managed_auth.sql | Self-managed phone+password identity: drop `profiles_id_fkey` → `auth.users`, add locked-down `user_credentials` (RLS, no policies), atomic `fn_register_user` (SECURITY DEFINER, service-role only) |
+| 0016_age_verification.sql | Age-gate (≥18) for real-money play: `kyc_status` default → `'none'`, age check in `fn_create_deposit` / `fn_open_position` (`AGE_NOT_VERIFIED`), and `fn_set_basic_profile` (name + DOB, DOB immutable, `AGE_RESTRICTED` for minors; service-role only) |
 
 ## Applying
 With the Supabase/Postgres connection, apply each file in order. They are safe to re-run.
