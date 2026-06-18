@@ -42,7 +42,7 @@ wss.on("connection", (ws) => {
   send(ws, "hello", { serverTime: Date.now(), serverSeedHash, gameConfig: game.onlineConfigSnapshot() });
   broadcast("online", { count: all.size });
 
-  ws.on("message", (raw) => {
+  ws.on("message", async (raw) => {
     let msg: any; try { msg = JSON.parse(String(raw)); } catch { return send(ws, "error", { code: "BAD_JSON" }); }
     try {
       switch (msg.type) {
@@ -51,21 +51,21 @@ wss.on("connection", (ws) => {
           if (!userId) return send(ws, "error", { code: "AUTH_REQUIRED" });
           userOf.set(ws, userId);
           (byUser.get(userId) ?? byUser.set(userId, new Set()).get(userId)!).add(ws);
-          if (wallet.getBalance(userId) === 0) wallet.seed(userId, 100000); // demo float KES 1000
-          return send(ws, "balance", { real: wallet.getBalance(userId), currency: "KES" });
+          if ((await wallet.getBalance(userId)) === 0) wallet.seed(userId, 100000); // demo float KES 1000
+          return send(ws, "balance", { real: await wallet.getBalance(userId), currency: "KES" });
         }
         case "open_position": {
           const userId = userOf.get(ws); if (!userId) return send(ws, "error", { code: "AUTH_REQUIRED" });
-          const p = game.openPosition({
+          const p = await game.openPosition({
             userId, stakeCents: Number(msg.data.stakeCents),
             direction: msg.data.direction as Direction, durationS: msg.data.durationS,
           });
           send(ws, "position_opened", { positionId: p.id, entryRate: p.outcome.entryRate, direction: p.direction, stakeCents: p.stakeCents, durationS: p.durationS, expiresAtMs: p.expiresAtMs });
-          return send(ws, "balance", { real: wallet.getBalance(userId), currency: "KES" });
+          return send(ws, "balance", { real: await wallet.getBalance(userId), currency: "KES" });
         }
         case "sell": {
           const userId = userOf.get(ws); if (!userId) return send(ws, "error", { code: "AUTH_REQUIRED" });
-          game.sell(String(msg.data.positionId), userId); return;
+          await game.sell(String(msg.data.positionId), userId); return;
         }
         case "ping": return send(ws, "pong", {});
         default: return send(ws, "error", { code: "UNKNOWN_TYPE", message: msg.type });

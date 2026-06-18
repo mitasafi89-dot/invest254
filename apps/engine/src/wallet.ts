@@ -1,47 +1,50 @@
 import { type Cents, assertCents } from "@printpesa/shared";
 
 /**
- * Wallet abstraction. The in-memory implementation is authoritative for the
- * prototype; a Postgres implementation will perform the same operations inside a
- * `SELECT ... FOR UPDATE` transaction writing the immutable ledger (see docs/07).
- * Node is single-threaded so in-memory ops are inherently atomic.
+ * Async wallet abstraction so the same engine code works over an in-memory store
+ * (tests/dev) or a Postgres store (production) where every operation is an atomic,
+ * idempotent transaction writing the immutable ledger (see docs/07).
  */
 export interface WalletStore {
-  getBalance(userId: string): Cents;
-  /** Debit stake; throws if insufficient. Returns new balance. */
-  debit(userId: string, amount: Cents, ref: string): Cents;
-  /** Credit payout/refund. Returns new balance. */
-  credit(userId: string, amount: Cents, ref: string): Cents;
+  getBalance(userId: string): Promise<Cents>;
+  /** Atomically debit a stake for a position; throws INSUFFICIENT_FUNDS. Returns new balance. */
+  debitStake(userId: string, amount: Cents, positionId: string): Promise<Cents>;
+  /** Atomically credit a payout for a position (idempotent by positionId). Returns new balance. */
+  creditPayout(userId: string, amount: Cents, positionId: string): Promise<Cents>;
 }
 
-export interface LedgerEntry { userId: string; type: "stake" | "payout" | "refund" | "seed"; amount: Cents; ref: string; ts: number; }
+export interface LedgerEntry { userId: string; type: "stake" | "payout" | "seed"; amount: Cents; ref: string; ts: number; }
 
+/** In-memory store. Node is single-threaded, so each method body is atomic. */
 export class InMemoryWalletStore implements WalletStore {
   private balances = new Map<string, Cents>();
+  private creditedPositions = new Set<string>();
   readonly ledger: LedgerEntry[] = [];
 
   seed(userId: string, amount: Cents): void {
     this.balances.set(userId, assertCents(amount));
     this.ledger.push({ userId, type: "seed", amount, ref: "seed", ts: Date.now() });
   }
-  getBalance(userId: string): Cents { return this.balances.get(userId) ?? 0; }
+  async getBalance(userId: string): Promise<Cents> { return this.balances.get(userId) ?? 0; }
 
-  debit(userId: string, amount: Cents, ref: string): Cents {
+  async debitStake(userId: string, amount: Cents, positionId: string): Promise<Cents> {
     assertCents(amount, "debit");
     if (amount <= 0) throw new RangeError("debit must be positive");
-    const bal = this.getBalance(userId);
+    const bal = this.balances.get(userId) ?? 0;
     if (bal < amount) throw new Error(`INSUFFICIENT_FUNDS: balance ${bal} < ${amount}`);
     const next = bal - amount;
     this.balances.set(userId, next);
-    this.ledger.push({ userId, type: "stake", amount: -amount, ref, ts: Date.now() });
+    this.ledger.push({ userId, type: "stake", amount: -amount, ref: `stake:${positionId}`, ts: Date.now() });
     return next;
   }
-  credit(userId: string, amount: Cents, ref: string): Cents {
+  async creditPayout(userId: string, amount: Cents, positionId: string): Promise<Cents> {
     assertCents(amount, "credit");
     if (amount < 0) throw new RangeError("credit must be >= 0");
-    const next = this.getBalance(userId) + amount;
+    if (this.creditedPositions.has(positionId)) return this.balances.get(userId) ?? 0; // idempotent
+    this.creditedPositions.add(positionId);
+    const next = (this.balances.get(userId) ?? 0) + amount;
     this.balances.set(userId, next);
-    if (amount > 0) this.ledger.push({ userId, type: "payout", amount, ref, ts: Date.now() });
+    if (amount > 0) this.ledger.push({ userId, type: "payout", amount, ref: `payout:${positionId}`, ts: Date.now() });
     return next;
   }
 }
