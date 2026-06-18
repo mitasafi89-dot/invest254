@@ -1,6 +1,7 @@
-import { rtp, type GameConfig } from "@printpesa/shared";
-import type { FairnessRecord, ActivityRow } from "@printpesa/engine";
+import { rtp, type GameConfig, type Cents } from "@printpesa/shared";
+import type { FairnessRecord, ActivityRow, ChatRow, ChatPostResult, PaymentService, Verifier } from "@printpesa/engine";
 import { Router, ApiError, serverFrom, type Ctx } from "./http.js";
+import { registerProtectedRoutes } from "./app.payments.js";
 import type { Server } from "node:http";
 
 /**
@@ -10,15 +11,28 @@ import type { Server } from "node:http";
  * implementations; tests wire in-memory fakes. Player/payments/admin routes (E2) extend
  * this interface — E1 ships the public surface (health, game config, fairness, activity).
  */
+export interface WalletBalance { real: Cents; bonus: Cents; currency: string; }
+
 export interface ApiDeps {
   /** JWT verifier for player/admin routes; null → DEV header auth (see requireAuth). */
-  verifier: import("@printpesa/engine").Verifier | null;
+  verifier: Verifier | null;
   /** Public game configuration snapshot source. */
   config: GameConfig;
   /** Public fairness record for a game-day id (commitment always; seed only after reveal). */
   fairnessById(gameDayId: number): Promise<FairnessRecord | null>;
   /** Live activity feed (newest first). */
   activity: { recent(limit: number): Promise<ActivityRow[]> };
+
+  // ── E2: player + payments + admin ──
+  /** Deposit/withdrawal orchestration over the atomic 0014 RPCs + Daraja. */
+  payments: Pick<PaymentService,
+    "initiateDeposit" | "requestWithdrawal" | "handleStkCallback" | "handleB2cResult" | "approveWithdrawal" | "rejectWithdrawal">;
+  /** Server-authoritative chat. */
+  chat: { recent(): Promise<ChatRow[]>; post(userId: string, username: string, raw: string): Promise<ChatPostResult> };
+  /** Resolve a player's display handle (falls back to a guest handle). */
+  resolveHandle(userId: string): Promise<string>;
+  /** Wallet balances (real + bonus) for the authenticated player. */
+  walletBalance(userId: string): Promise<WalletBalance>;
 }
 
 const BASE = "/api/v1";
@@ -88,6 +102,7 @@ export function registerPublicRoutes(router: Router, deps: ApiDeps): void {
 export function createRouter(deps: ApiDeps): Router {
   const router = new Router();
   registerPublicRoutes(router, deps);
+  registerProtectedRoutes(router, deps);
   return router;
 }
 

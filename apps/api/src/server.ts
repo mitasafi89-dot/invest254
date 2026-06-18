@@ -1,18 +1,20 @@
 import { DEFAULT_CONFIG } from "@printpesa/shared";
 import {
-  PgGameRepository, PgEngagementRepository, makeVerifier,
-  type GameRepository, type EngagementRepository, type Querier, type FairnessRecord,
+  PgGameRepository, PgEngagementRepository, PgPaymentRepository,
+  PaymentService, ChatService, ActivityService, makeDarajaClient, makeVerifier, maskHandle,
+  type GameRepository, type EngagementRepository, type PaymentRepository,
+  type Querier, type FairnessRecord,
 } from "@printpesa/engine";
-import { createApp, type ApiDeps } from "./app.js";
+import { createApp, type ApiDeps, type WalletBalance } from "./app.js";
 
 /**
- * Production bootstrap for the HTTP API. Wires the Postgres-backed repositories and the
- * Supabase JWT verifier from the environment, then listens. The public E1 surface needs
- * only fairness + activity reads; player/payments/admin deps (E2) are added here later.
+ * Production bootstrap for the HTTP API. Wires the Postgres-backed repositories, the
+ * PaymentService (atomic 0014 RPCs + Daraja provider), ChatService, and the Supabase JWT
+ * verifier from the environment, then listens. Withdrawal-success events are mirrored to
+ * the activity feed (privacy-masked), demonstrating the end-to-end integration.
  *
- * `fairnessById` reads the leak-safe `v_fairness` view by id directly (the repository's
- * `getFairness` is keyed by trade_date), so the public seed/commitment endpoint stays a
- * single indexed lookup with no seed leakage before reveal.
+ * `fairnessById`/`walletBalance` read leak-safe views/columns directly (single indexed
+ * lookups) rather than widening the engine repository contract for two read paths.
  */
 const PORT = Number(process.env.PORT ?? 8081);
 
@@ -27,8 +29,30 @@ async function buildDeps(): Promise<ApiDeps> {
   const { Pool } = await import("pg");
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const q = pool as unknown as Querier;
+
   const repo: GameRepository = new PgGameRepository(q);
   const engage: EngagementRepository = new PgEngagementRepository(q);
+  const payRepo: PaymentRepository = new PgPaymentRepository(q);
+
+  // Real activity feed: record genuine withdrawals (masked). No simulator in the API process
+  // (the WS engine owns the simulated feed); emit is a no-op since the API doesn't broadcast.
+  const activity = new ActivityService(engage, () => {}, { enabled: false });
+
+  const resolveHandle = async (userId: string): Promise<string> =>
+    (await engage.getUsername(userId)) ?? `guest_${userId.slice(0, 6)}`;
+
+  const daraja = makeDarajaClient();
+  const payments = new PaymentService(payRepo, daraja, {
+    events: {
+      onWithdrawalSuccess: ({ userId, amountCents }) => {
+        void resolveHandle(userId)
+          .then((h) => activity.recordWithdrawal(maskHandle(h), amountCents))
+          .catch((err) => console.error("[api] activity.recordWithdrawal:", (err as Error).message));
+      },
+    },
+  });
+
+  const chat = new ChatService(engage);
 
   return {
     verifier,
@@ -49,6 +73,16 @@ async function buildDeps(): Promise<ApiDeps> {
       };
     },
     activity: { recent: (limit: number) => engage.listRecentActivity(limit) },
+    payments,
+    chat,
+    resolveHandle,
+    walletBalance: async (userId: string): Promise<WalletBalance> => {
+      const r = await q.query("select real_balance, bonus_balance, currency from wallets where user_id = $1", [userId]);
+      if (!r.rows.length) return { real: 0, bonus: 0, currency: "KES" };
+      const x = r.rows[0];
+      const toCents = (v: unknown): number => (typeof v === "string" ? Number(v) : (v as number)) || 0;
+      return { real: toCents(x.real_balance), bonus: toCents(x.bonus_balance), currency: String(x.currency ?? "KES") };
+    },
   };
 }
 

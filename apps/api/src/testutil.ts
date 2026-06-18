@@ -1,15 +1,20 @@
 import type { AddressInfo } from "node:net";
-import { DEFAULT_CONFIG } from "@printpesa/shared";
+import { DEFAULT_CONFIG, type Cents } from "@printpesa/shared";
 import {
-  InMemoryEngagementRepository, type FairnessRecord, type AuthClaims, type Verifier,
+  InMemoryEngagementRepository, InMemoryPaymentRepository, StubDarajaClient,
+  PaymentService, ChatService, ActivityService, maskHandle,
+  type FairnessRecord, type AuthClaims, type Verifier,
 } from "@printpesa/engine";
-import { createApp, type ApiDeps } from "./app.js";
+import { createApp, type ApiDeps, type WalletBalance } from "./app.js";
 
 /**
- * In-memory test harness: builds an app from fake deps, listens on an ephemeral port,
- * and returns the base URL + a close fn + the underlying fakes so tests can pre-seed and
- * assert. No Postgres, no real network calls. The stub verifier accepts a `<userId>` or
- * `<userId>:<role>` bearer token so auth/role gates can be exercised in E2 without JWTs.
+ * In-memory test harness: builds an app from REAL engine services backed by in-memory
+ * repositories, listens on an ephemeral port, and returns the base URL + a close fn + the
+ * underlying fakes so tests can pre-seed and assert. No Postgres, no real network.
+ *
+ * The stub verifier accepts a `<userId>` or `<userId>:<role>` bearer token so player and
+ * finance-admin routes can be exercised without minting JWTs. Chat rate-limiting is disabled
+ * in the harness (rateLimitMs:0) — its time-based behaviour is covered by unit tests.
  */
 export function stubVerifier(): Verifier {
   return async (token: string): Promise<AuthClaims> => {
@@ -20,31 +25,66 @@ export function stubVerifier(): Verifier {
   };
 }
 
+export const TEST_USER = "u-test";
+export const TEST_ADMIN = "u-admin";
+
 export interface TestApi {
   baseUrl: string;
   deps: ApiDeps;
   engage: InMemoryEngagementRepository;
+  payRepo: InMemoryPaymentRepository;
+  daraja: StubDarajaClient;
   fairness: Map<number, FairnessRecord>;
+  bonus: Map<string, Cents>;
+  withdrawalSuccesses: Array<{ userId: string; amountCents: Cents }>;
   close(): Promise<void>;
 }
 
-export async function startTestApi(overrides: Partial<ApiDeps> = {}): Promise<TestApi> {
+export interface TestApiOptions { startingBalanceCents?: Cents; depsOverrides?: Partial<ApiDeps>; }
+
+export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> {
   const engage = new InMemoryEngagementRepository();
-  // Seed a couple of real activity rows (newest last; repo returns newest-first).
   await engage.insertActivity({ kind: "signup", username: "newbie", amountCents: null, isSimulated: false, message: "@newbie just joined PrintPesa" });
   await engage.insertActivity({ kind: "win", username: "wanj***", amountCents: 500_000, isSimulated: false, message: "@wanj*** just won KES 5,000.00 on a ×3.50 trade" });
+  engage.setUsername(TEST_USER, "tester");
+
+  const payRepo = new InMemoryPaymentRepository();
+  payRepo.seed(TEST_USER, opts.startingBalanceCents ?? 1_000_000); // KES 10,000
+  const daraja = new StubDarajaClient();
+  const withdrawalSuccesses: Array<{ userId: string; amountCents: Cents }> = [];
+  const activity = new ActivityService(engage, () => {}, { enabled: false });
+
+  const resolveHandle = async (userId: string): Promise<string> =>
+    (await engage.getUsername(userId)) ?? `guest_${userId.slice(0, 6)}`;
+
+  const payments = new PaymentService(payRepo, daraja, {
+    events: {
+      onWithdrawalSuccess: (e) => {
+        withdrawalSuccesses.push(e);
+        void resolveHandle(e.userId).then((h) => activity.recordWithdrawal(maskHandle(h), e.amountCents)).catch(() => {});
+      },
+    },
+  });
+
+  const chat = new ChatService(engage, { rateLimitMs: 0 });
 
   const fairness = new Map<number, FairnessRecord>([
     [1, { gameDayId: 1, tradeDate: "2026-06-17", serverSeedHash: "hash-yesterday", serverSeed: "revealed-seed-yesterday", revealedAt: "2026-06-18T00:00:00.000Z" }],
     [2, { gameDayId: 2, tradeDate: "2026-06-18", serverSeedHash: "hash-today", serverSeed: null, revealedAt: null }],
   ]);
+  const bonus = new Map<string, Cents>();
 
   const deps: ApiDeps = {
     verifier: stubVerifier(),
     config: DEFAULT_CONFIG,
     fairnessById: async (id) => fairness.get(id) ?? null,
     activity: { recent: (limit) => engage.listRecentActivity(limit) },
-    ...overrides,
+    payments,
+    chat,
+    resolveHandle,
+    walletBalance: async (userId): Promise<WalletBalance> =>
+      ({ real: await payRepo.getBalance(userId), bonus: bonus.get(userId) ?? 0, currency: "KES" }),
+    ...opts.depsOverrides,
   };
 
   const server = createApp(deps);
@@ -53,9 +93,7 @@ export async function startTestApi(overrides: Partial<ApiDeps> = {}): Promise<Te
 
   return {
     baseUrl: `http://127.0.0.1:${port}`,
-    deps,
-    engage,
-    fairness,
+    deps, engage, payRepo, daraja, fairness, bonus, withdrawalSuccesses,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
