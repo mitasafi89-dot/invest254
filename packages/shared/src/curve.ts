@@ -17,6 +17,15 @@ import type { Tick } from "./types.js";
  */
 export interface CurveComponent { freq: number; amp: number; phase: number; }
 
+/**
+ * Display mapping for {@link CurveGenerator.rate}:
+ *   rate = CURVE_BASE_RATE + CURVE_AMPLITUDE * value,   value ∈ (-1, 1)
+ * Exported so the frontend can invert it — value = (rate - CURVE_BASE_RATE) / CURVE_AMPLITUDE —
+ * and render the signed curve around its neutral 0-axis (green above / red below).
+ */
+export const CURVE_BASE_RATE = 0.2;
+export const CURVE_AMPLITUDE = 0.25;
+
 export class CurveGenerator {
   readonly components: CurveComponent[];
   private readonly ampNorm: number;
@@ -49,8 +58,8 @@ export class CurveGenerator {
   }
 
   /** Displayed rate, centred at `base`. */
-  rate(t: number, base = 0.2): number {
-    return base + 0.25 * this.value(t);
+  rate(t: number, base = CURVE_BASE_RATE): number {
+    return base + CURVE_AMPLITUDE * this.value(t);
   }
 
   /** Build a tick at epoch ms relative to the day-start epoch ms. */

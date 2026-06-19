@@ -1,6 +1,7 @@
  'use client';
 
 import { useEffect, useRef } from 'react';
+import { CURVE_AMPLITUDE, CURVE_BASE_RATE } from '@printpesa/shared/curve';
 import type { Tick } from '@/lib/game/types';
 
 interface Colors {
@@ -8,6 +9,7 @@ interface Colors {
   down: string;
   border: string;
   muted: string;
+  axis: string;
 }
 
 function readColors(): Colors {
@@ -18,6 +20,7 @@ function readColors(): Colors {
     down: g('--pp-down', '#ff5470'),
     border: g('--pp-border', '#262a33'),
     muted: g('--pp-muted', '#8b909a'),
+    axis: g('--pp-muted', '#8b909a'),
   };
 }
 
@@ -48,6 +51,11 @@ function smoothPath(ctx: CanvasRenderingContext2D, p: Pt[]): void {
     ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2[0], p2[1]);
   }
 }
+
+// Signed display value ∈ (-1, 1): the curve's tanh signal recovered from `rate`.
+const toValue = (rate: number) => (rate - CURVE_BASE_RATE) / CURVE_AMPLITUDE;
+// Fixed symmetric vertical scale (value is tanh-bounded to ±1; small headroom for glow).
+const Y_MAX = 1.08;
 
 export function CurveCanvas({
   getTicks,
@@ -94,19 +102,47 @@ export function CurveCanvas({
 
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    const PAD_Y = 12;
+
+    // Vertical geometry for the fixed ±Y_MAX scale; 0 sits dead-centre.
+    const geom = () => {
+      const usableH = Math.max(1, cssH - 2 * PAD_Y);
+      const Y = (v: number) => {
+        const c = Math.max(-Y_MAX, Math.min(Y_MAX, v));
+        return PAD_Y + usableH * ((Y_MAX - c) / (2 * Y_MAX));
+      };
+      return { Y, y0: PAD_Y + usableH * 0.5 };
+    };
+
+    // y-axis labels (+1.0 / 0.0 / -1.0) and the prominent 0-axis line.
+    const drawAxis = (y0: number, Y: (v: number) => number) => {
+      ctx.strokeStyle = hexA(colors.axis, 0.45);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, y0);
+      ctx.lineTo(cssW, y0);
+      ctx.stroke();
+
+      ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = hexA(colors.muted, 0.6);
+      ctx.fillText('1.0', 6, Y(1));
+      ctx.fillText('-1.0', 6, Y(-1));
+      ctx.fillStyle = hexA(colors.muted, 0.95);
+      ctx.fillText('0.0', 6, y0);
+    };
+
     const drawEmpty = () => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cssW, cssH);
-      ctx.strokeStyle = colors.border;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, cssH / 2);
-      ctx.lineTo(cssW, cssH / 2);
-      ctx.stroke();
+      const { Y, y0 } = geom();
+      drawAxis(y0, Y);
       ctx.fillStyle = colors.muted;
       ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Waiting for live ticks…', cssW / 2, cssH / 2 - 8);
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('Waiting for live ticks…', cssW / 2, y0 - 8);
     };
 
     const render = () => {
@@ -139,63 +175,83 @@ export function CurveCanvas({
         pts = ds;
       }
 
-      let mn = Infinity;
-      let mx = -Infinity;
-      for (const p of pts) {
-        if (p.rate < mn) mn = p.rate;
-        if (p.rate > mx) mx = p.rate;
-      }
-      if (mx - mn < 1e-9) {
-        mx += 1e-3;
-        mn -= 1e-3;
-      }
-
-      const padY = 14;
-      const usableH = Math.max(1, cssH - 2 * padY);
+      const { Y, y0 } = geom();
       const X = (t: number) => ((t - start) / w) * cssW;
-      const Y = (r: number) => padY + usableH * (1 - (r - mn) / (mx - mn));
 
       const last2 = pts[pts.length - 1]!;
-      const coords: Pt[] = pts.map((p) => [X(p.t), Y(p.rate)]);
-      coords.push([cssW, Y(last2.rate)]); // hold the line to the live right edge
+      const coords: Pt[] = pts.map((p) => [X(p.t), Y(toValue(p.rate))]);
+      coords.push([cssW, Y(toValue(last2.rate))]); // hold the line to the live right edge
 
-      const up = (last2.delta ?? 0) >= 0;
-      const line = up ? colors.up : colors.down;
-      const first = coords[0]!;
+      const firstX = coords[0]![0];
+      const lastX = coords[coords.length - 1]![0];
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cssW, cssH);
 
-      // area fill
-      ctx.beginPath();
-      smoothPath(ctx, coords);
-      ctx.lineTo(cssW, cssH);
-      ctx.lineTo(first[0], cssH);
-      ctx.closePath();
-      const grad = ctx.createLinearGradient(0, 0, 0, cssH);
-      grad.addColorStop(0, hexA(line, 0.3));
-      grad.addColorStop(1, hexA(line, 0));
-      ctx.fillStyle = grad;
-      ctx.fill();
+      // Closed area between the curve and the 0-axis (filled twice, clipped per side).
+      const buildArea = () => {
+        ctx.beginPath();
+        smoothPath(ctx, coords);
+        ctx.lineTo(lastX, y0);
+        ctx.lineTo(firstX, y0);
+        ctx.closePath();
+      };
 
-      // glowing stroke
+      // ── Above 0 → green (clip to the region above the axis) ──
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, cssW, y0);
+      ctx.clip();
+      buildArea();
+      const gUp = ctx.createLinearGradient(0, PAD_Y, 0, y0);
+      gUp.addColorStop(0, hexA(colors.up, 0.32));
+      gUp.addColorStop(1, hexA(colors.up, 0));
+      ctx.fillStyle = gUp;
+      ctx.fill();
       ctx.beginPath();
       smoothPath(ctx, coords);
       ctx.lineWidth = 2;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
-      ctx.strokeStyle = line;
-      ctx.shadowColor = line;
+      ctx.strokeStyle = colors.up;
+      ctx.shadowColor = colors.up;
       ctx.shadowBlur = 12;
       ctx.stroke();
       ctx.shadowBlur = 0;
+      ctx.restore();
 
-      // live dot
-      const lx = cssW;
-      const ly = Y(last2.rate);
+      // ── Below 0 → red (clip to the region below the axis) ──
+      ctx.save();
       ctx.beginPath();
-      ctx.arc(lx - 1, ly, 3, 0, Math.PI * 2);
-      ctx.fillStyle = line;
+      ctx.rect(0, y0, cssW, Math.max(1, cssH - y0));
+      ctx.clip();
+      buildArea();
+      const gDn = ctx.createLinearGradient(0, y0, 0, cssH - PAD_Y);
+      gDn.addColorStop(0, hexA(colors.down, 0));
+      gDn.addColorStop(1, hexA(colors.down, 0.32));
+      ctx.fillStyle = gDn;
+      ctx.fill();
+      ctx.beginPath();
+      smoothPath(ctx, coords);
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = colors.down;
+      ctx.shadowColor = colors.down;
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      // 0-axis + labels on top.
+      drawAxis(y0, Y);
+
+      // Live dot, coloured by the current side.
+      const lastV = toValue(last2.rate);
+      const ly = Y(lastV);
+      ctx.beginPath();
+      ctx.arc(cssW - 2, ly, 3, 0, Math.PI * 2);
+      ctx.fillStyle = lastV >= 0 ? colors.up : colors.down;
       ctx.fill();
     };
 
