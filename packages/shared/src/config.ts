@@ -29,7 +29,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   maxStakeCents: 5_000_000,
   defaultDurationS: 10,
   tickRateMs: 150,
-  driftBias: 0.02,
+  driftBias: 0.30,
   volatility: 1.0,
   targetWinRate: 0.125,
 };

@@ -23,7 +23,7 @@ export class CurveGenerator {
 
   constructor(serverSeed: string, private readonly cfg: GameConfig, private readonly K = 6) {
     const rng = new SeededRng(serverSeed, "curve");
-    const baseFreq = 0.03;  // Hz — slow swell (~33s period)
+    const baseFreq = 0.06;  // Hz — base swell (~17s period); higher = faster wave
     const ratio = 1.9;      // geometric spread across octaves
     const comps: CurveComponent[] = [];
     let ampSum = 0;
