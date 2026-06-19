@@ -1,7 +1,7 @@
  'use client';
 
 import { useEffect, useRef } from 'react';
-import { CURVE_AMPLITUDE, CURVE_BASE_RATE } from '@printpesa/shared/curve';
+import { CURVE_AMPLITUDE, CURVE_BASE_RATE } from '@printpesa/shared/config';
 import type { Tick } from '@/lib/game/types';
 
 interface Colors {

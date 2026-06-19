@@ -1,5 +1,5 @@
 import { SeededRng } from "./prng.js";
-import type { GameConfig } from "./config.js";
+import { type GameConfig, CURVE_AMPLITUDE, CURVE_BASE_RATE } from "./config.js";
 import type { Tick } from "./types.js";
 
 /**
@@ -16,15 +16,6 @@ import type { Tick } from "./types.js";
  * renders an identical curve and outcomes are reproducible/verifiable.
  */
 export interface CurveComponent { freq: number; amp: number; phase: number; }
-
-/**
- * Display mapping for {@link CurveGenerator.rate}:
- *   rate = CURVE_BASE_RATE + CURVE_AMPLITUDE * value,   value ∈ (-1, 1)
- * Exported so the frontend can invert it — value = (rate - CURVE_BASE_RATE) / CURVE_AMPLITUDE —
- * and render the signed curve around its neutral 0-axis (green above / red below).
- */
-export const CURVE_BASE_RATE = 0.2;
-export const CURVE_AMPLITUDE = 0.25;
 
 export class CurveGenerator {
   readonly components: CurveComponent[];

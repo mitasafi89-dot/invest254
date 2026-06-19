@@ -1,5 +1,13 @@
 import type { Cents } from "./money.js";
 
+/**
+ * Display mapping for the curve: rate = CURVE_BASE_RATE + CURVE_AMPLITUDE * value,
+ * with value ∈ (-1, 1). Defined here (a dependency-free module) so the browser can
+ * import it to invert rate -> value without pulling in Node-only curve/prng code.
+ */
+export const CURVE_BASE_RATE = 0.2;
+export const CURVE_AMPLITUDE = 0.25;
+
 /** Game configuration, mirroring the public.game_config DB singleton. */
 export interface GameConfig {
   houseEdge: number;        // 0.75 -> RTP 0.25
