@@ -116,3 +116,48 @@ test("admin deposits monitor lists deposits and the reconcile read returns a sum
     assert.ok(rec.stale.some((d: any) => d.checkoutRequestId === "chk-x"));
   } finally { await api.close(); }
 });
+
+test("admin reports: per-day & per-user JSON, CSV export, and the date-range filter (J4)", async () => {
+  const api = await startTestApi();
+  try {
+    const uid = await register(api, "0712000030", "reporter");
+    api.payRepo.seed(uid, 0);
+
+    // A settled play on a fixed trade-date + a success deposit (lands on "today").
+    api.identity.recordSettledPlay(uid, "2026-06-10", 10_000, 2_500); // turnover 10000, ggr 7500
+    const dep = await api.payRepo.createDeposit(uid, 50_000, "0712000030");
+    await api.payRepo.attachStk(dep, "m", "chk-r");
+    await api.payRepo.completeDeposit("chk-r", 0, "ok", "RCPT", {});
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Per-user JSON.
+    const users = (await json(await req(api, "GET", "/api/v1/admin/reports/users", { token: "admin-1:admin" }))).items as any[];
+    const urow = users.find((r) => r.userId === uid)!;
+    assert.equal(urow.turnoverCents, 10_000);
+    assert.equal(urow.ggrCents, 7_500);
+    assert.equal(urow.depositsCents, 50_000);
+
+    // Per-day JSON: game day carries turnover/GGR; the deposit day carries the cash.
+    const daily = (await json(await req(api, "GET", "/api/v1/admin/reports/daily", { token: "admin-1:admin" }))).items as any[];
+    const d10 = daily.find((r) => r.date === "2026-06-10")!;
+    assert.equal(d10.turnoverCents, 10_000);
+    assert.equal(d10.ggrCents, 7_500);
+    assert.equal(daily.find((r) => r.date === today)!.depositsCents, 50_000);
+
+    // CSV export: content-type + header + a data row.
+    const csvRes = await req(api, "GET", "/api/v1/admin/reports/daily?format=csv", { token: "admin-1:admin" });
+    assert.equal(csvRes.status, 200);
+    assert.match(csvRes.headers.get("content-type") ?? "", /text\/csv/);
+    const csvLines = (await csvRes.text()).trim().split("\r\n");
+    assert.equal(csvLines[0], "date,deposits_cents,withdrawals_cents,turnover_cents,ggr_cents");
+    assert.ok(csvLines.some((l) => l.startsWith("2026-06-10,")));
+
+    // Date-range filter excludes the old game day.
+    const filtered = (await json(await req(api, "GET", "/api/v1/admin/reports/daily?from=2030-01-01", { token: "admin-1:admin" }))).items as any[];
+    assert.ok(!filtered.some((r) => r.date === "2026-06-10"));
+
+    // Malformed date -> 400; player token -> 403.
+    assert.equal((await req(api, "GET", "/api/v1/admin/reports/daily?from=2026/06/10", { token: "admin-1:admin" })).status, 400);
+    assert.equal((await req(api, "GET", "/api/v1/admin/reports/daily", { token: uid })).status, 403);
+  } finally { await api.close(); }
+});

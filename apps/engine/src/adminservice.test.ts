@@ -181,3 +181,55 @@ test("deposits monitor: lists deposits (with STK fields) and reconcile flags sta
   assert.equal(rec.stale.length, 2); // pending + processing only; success is terminal
   assert.ok(rec.stale.every((d) => d.status === "pending" || d.status === "processing"));
 });
+
+test("reports: per-day & per-user finance with date-range filtering (J4)", async () => {
+  const identity = new InMemoryIdentityRepository();
+  let clockMs = Date.UTC(2026, 5, 10, 9, 0, 0); // mutable clock -> deterministic transaction dates
+  const payRepo = new InMemoryPaymentRepository(() => clockMs);
+  const admin = new AdminService(new InMemoryAdminRepository(identity, payRepo));
+
+  const a = (await identity.register("254700000070", "alice", HASH)).userId;
+  const b = (await identity.register("254700000071", "bob", HASH)).userId;
+  payRepo.seed(a, 0);
+  payRepo.seed(b, 0);
+
+  const deposit = async (uid: string, cents: number, chk: string): Promise<void> => {
+    const id = await payRepo.createDeposit(uid, cents, "254700000000");
+    await payRepo.attachStk(id, "m", chk);
+    await payRepo.completeDeposit(chk, 0, "ok", "RCPT", {});
+  };
+  const withdraw = async (uid: string, cents: number): Promise<void> => {
+    const { txId } = await payRepo.createWithdrawal(uid, cents, "254700000000", 1);
+    await payRepo.approveWithdrawal(txId, "ops");
+    await payRepo.completeWithdrawal(txId, 0, null, "RCPT", {});
+  };
+
+  // Day 2026-06-10: alice deposits 100000 then withdraws 40000; two settled plays.
+  clockMs = Date.UTC(2026, 5, 10, 9, 0, 0);
+  await deposit(a, 100_000, "c1");
+  await withdraw(a, 40_000);
+  identity.recordSettledPlay(a, "2026-06-10", 10_000, 3_000); // turnover 10000, ggr 7000
+  identity.recordSettledPlay(b, "2026-06-10", 5_000, 5_000);  // turnover 5000,  ggr 0
+
+  // Day 2026-06-11: bob deposits 60000; one settled play for alice.
+  clockMs = Date.UTC(2026, 5, 11, 9, 0, 0);
+  await deposit(b, 60_000, "c2");
+  identity.recordSettledPlay(a, "2026-06-11", 2_000, 0);      // turnover 2000, ggr 2000
+
+  const daily = await admin.reportDaily({});
+  assert.equal(daily.length, 2);
+  assert.deepEqual(daily[0], { date: "2026-06-10", depositsCents: 100_000, withdrawalsCents: 40_000, turnoverCents: 15_000, ggrCents: 7_000 });
+  assert.deepEqual(daily[1], { date: "2026-06-11", depositsCents: 60_000, withdrawalsCents: 0, turnoverCents: 2_000, ggrCents: 2_000 });
+
+  // Inclusive range bound keeps only the later day.
+  const d11 = await admin.reportDaily({ from: "2026-06-11" });
+  assert.deepEqual(d11.map((r) => r.date), ["2026-06-11"]);
+
+  // Per-user ordered by GGR desc: alice (9000) before bob (0).
+  const byUser = await admin.reportByUser({});
+  assert.equal(byUser.length, 2);
+  assert.equal(byUser[0]!.username, "alice");
+  assert.deepEqual(byUser[0], { userId: a, username: "alice", depositsCents: 100_000, withdrawalsCents: 40_000, turnoverCents: 12_000, ggrCents: 9_000 });
+  assert.equal(byUser[1]!.username, "bob");
+  assert.deepEqual(byUser[1], { userId: b, username: "bob", depositsCents: 60_000, withdrawalsCents: 0, turnoverCents: 5_000, ggrCents: 0 });
+});

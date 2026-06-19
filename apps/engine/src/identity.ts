@@ -61,6 +61,8 @@ export interface AdminUserSnapshot {
 export interface AdminAffiliateSnapshot { userId: string; commissionRate: number; status: string; }
 /** A settled play (turnover/GGR source) for admin aggregation (J2). */
 export interface AdminPlaySnapshot { userId: string; stakeCents: number; payoutCents: number; }
+/** A settled play with its trade-date period, for per-day/per-user reports (J4). */
+export interface AdminReportPlay { userId: string; period: string; stakeCents: number; payoutCents: number; }
 /** A commission bucket for admin accrued/paid aggregation (J2). */
 export interface AdminCommissionSnapshot { commissionCents: number; status: string; }
 
@@ -535,6 +537,10 @@ export class InMemoryIdentityRepository implements IdentityRepository, Affiliate
   /** All settled plays (turnover/GGR aggregation). */
   adminPlays(): AdminPlaySnapshot[] {
     return this.plays.map((p) => ({ userId: p.referredUser, stakeCents: p.stakeCents, payoutCents: p.payoutCents }));
+  }
+  /** All settled plays with their trade-date period (per-day/per-user reports, J4). */
+  adminReportPlays(): AdminReportPlay[] {
+    return this.plays.map((p) => ({ userId: p.referredUser, period: p.period, stakeCents: p.stakeCents, payoutCents: p.payoutCents }));
   }
   /** Settled plays for one user. */
   adminPlaysOf(userId: string): AdminPlaySnapshot[] {

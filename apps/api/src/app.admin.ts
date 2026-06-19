@@ -1,5 +1,5 @@
 import { Router, ApiError, requireAuth, requireRole, type Ctx } from "./http.js";
-import type { PageQuery, AdminUserListQuery, AdminWithdrawalListQuery, AdminDepositListQuery } from "@printpesa/engine";
+import type { PageQuery, AdminUserListQuery, AdminWithdrawalListQuery, AdminDepositListQuery, ReportRange } from "@printpesa/engine";
 import type { ApiDeps } from "./app.js";
 
 /**
@@ -13,6 +13,8 @@ import type { ApiDeps } from "./app.js";
  *  - GET    /admin/withdrawals?status&cursor        withdrawal queue (read)
  *  - GET    /admin/deposits?status&cursor           deposits monitor (J3; STK statuses)
  *  - GET    /admin/deposits/reconcile?staleMinutes  deposits reconcile read (J3)
+ *  - GET    /admin/reports/daily?from&to&format     per-day finance report; JSON or CSV (J4)
+ *  - GET    /admin/reports/users?from&to&format     per-user finance report; JSON or CSV (J4)
  *  - GET    /admin/audit?cursor                     audit trail (read)
  * Thin transport over the engine AdminService — guards/audit live in the RPCs / in-memory mirror.
  */
@@ -57,6 +59,41 @@ function pageQuery(ctx: Ctx): PageQuery {
   const limitRaw = ctx.query.get("limit");
   return { limit: limitRaw === null ? undefined : Number(limitRaw), cursor: ctx.query.get("cursor") };
 }
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Parse optional inclusive `from`/`to` (YYYY-MM-DD) report bounds (J4). */
+function reportRange(ctx: Ctx): ReportRange {
+  const parse = (name: string): string | undefined => {
+    const v = ctx.query.get(name);
+    if (v === null) return undefined;
+    if (!DATE_RE.test(v)) throw new ApiError("INVALID_DATE", `${name} must be YYYY-MM-DD`, 400);
+    return v;
+  };
+  const from = parse("from");
+  const to = parse("to");
+  if (from !== undefined && to !== undefined && from > to) throw new ApiError("INVALID_RANGE", "from must be <= to", 400);
+  return { from, to };
+}
+
+/** Escape one CSV cell per RFC 4180 (quote when it holds a comma, quote, CR or LF). */
+function csvCell(v: string | number): string {
+  const s = String(v);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Stream a CSV file response directly (the JSON layer no-ops once headers are sent). */
+function sendCsv(ctx: Ctx, filename: string, header: readonly string[], rows: ReadonlyArray<ReadonlyArray<string | number>>): void {
+  const lines = [header, ...rows].map((r) => r.map(csvCell).join(","));
+  ctx.res.writeHead(200, {
+    "content-type": "text/csv; charset=utf-8",
+    "content-disposition": `attachment; filename="${filename}"`,
+  });
+  ctx.res.end(lines.join("\r\n") + "\r\n");
+}
+
+/** True when `?format=csv` is requested. */
+const wantsCsv = (ctx: Ctx): boolean => (ctx.query.get("format") ?? "").toLowerCase() === "csv";
 
 export function registerAdminRoutes(router: Router, deps: ApiDeps): void {
   const auth = requireAuth(deps.verifier);
@@ -119,6 +156,26 @@ export function registerAdminRoutes(router: Router, deps: ApiDeps): void {
   router.get(`${BASE}/admin/deposits`, auth, admin, async (ctx: Ctx) => {
     const q: AdminDepositListQuery = { ...pageQuery(ctx), status: ctx.query.get("status") ?? undefined };
     return deps.admin.listDeposits(q);
+  });
+
+  router.get(`${BASE}/admin/reports/daily`, auth, admin, async (ctx: Ctx) => {
+    const rows = await deps.admin.reportDaily(reportRange(ctx));
+    if (wantsCsv(ctx)) {
+      return sendCsv(ctx, "report-daily.csv",
+        ["date", "deposits_cents", "withdrawals_cents", "turnover_cents", "ggr_cents"],
+        rows.map((r) => [r.date, r.depositsCents, r.withdrawalsCents, r.turnoverCents, r.ggrCents]));
+    }
+    return { items: rows };
+  });
+
+  router.get(`${BASE}/admin/reports/users`, auth, admin, async (ctx: Ctx) => {
+    const rows = await deps.admin.reportByUser(reportRange(ctx));
+    if (wantsCsv(ctx)) {
+      return sendCsv(ctx, "report-users.csv",
+        ["user_id", "username", "deposits_cents", "withdrawals_cents", "turnover_cents", "ggr_cents"],
+        rows.map((r) => [r.userId, r.username, r.depositsCents, r.withdrawalsCents, r.turnoverCents, r.ggrCents]));
+    }
+    return { items: rows };
   });
 
   router.get(`${BASE}/admin/audit`, auth, admin, async (ctx: Ctx) => deps.admin.listAudit(pageQuery(ctx)));

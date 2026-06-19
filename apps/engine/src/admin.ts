@@ -48,6 +48,13 @@ export interface AdminDepositStatusBucket { status: string; count: number; amoun
 /** Deposits reconcile read (J3): per-status totals + the non-terminal STK pushes that are stale
  *  (older than `staleMinutes`) and therefore the candidates to reconcile against M-Pesa. */
 export interface AdminDepositsReconcile { summary: AdminDepositStatusBucket[]; staleMinutes: number; stale: AdminDepositRow[]; }
+/** Inclusive `YYYY-MM-DD` date bounds for a report; either side may be omitted (J4). */
+export interface ReportRange { from?: string | undefined; to?: string | undefined; }
+/** One calendar day of operator finance (J4). Cash facts are keyed by transaction date,
+ *  game facts (turnover/GGR) by the position's game-day trade date. */
+export interface DailyReportRow { date: string; depositsCents: Cents; withdrawalsCents: Cents; turnoverCents: Cents; ggrCents: Cents; }
+/** Per-user finance totals over the report window (J4). */
+export interface UserReportRow { userId: string; username: string; depositsCents: Cents; withdrawalsCents: Cents; turnoverCents: Cents; ggrCents: Cents; }
 
 /** Durable boundary for the admin back office (RPCs + reads / in-memory mirror). */
 export interface AdminRepository {
@@ -61,6 +68,8 @@ export interface AdminRepository {
   adjustBalance(actorId: string, actorRole: string, targetId: string, amountCents: Cents, reason: string): Promise<AdjustBalanceResult>;
   listDeposits(q: AdminDepositListQuery): Promise<Page<AdminDepositRow>>;
   depositsReconcile(staleMinutes: number): Promise<AdminDepositsReconcile>;
+  reportDaily(range: ReportRange): Promise<DailyReportRow[]>;
+  reportByUser(range: ReportRange): Promise<UserReportRow[]>;
 }
 
 const VALID_STATUS = ["active", "suspended", "banned"];
@@ -68,6 +77,12 @@ const ADMIN_ROLES = ["admin", "superadmin"];
 
 const num = (v: unknown): number => (typeof v === "string" ? Number(v) : (v as number)) || 0;
 const ms = (v: unknown): number => (v instanceof Date ? v.getTime() : new Date(String(v)).getTime());
+/** Normalize any timestamp/date value to a `YYYY-MM-DD` (UTC) day key. */
+const day = (v: unknown): string => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+/** Day key (UTC) for an epoch-ms timestamp. */
+const dayOfMs = (msVal: number): string => new Date(msVal).toISOString().slice(0, 10);
+/** True when `d` (YYYY-MM-DD) falls within an inclusive ReportRange. */
+const inRange = (d: string, r: ReportRange): boolean => (r.from == null || d >= r.from) && (r.to == null || d <= r.to);
 
 /** Re-raise the bare admin error code the RPCs raise instead of the wrapped pg message. */
 function mapAdminError(e: unknown): never {
@@ -237,6 +252,76 @@ export class PgAdminRepository implements AdminRepository {
         limit 100`,
       [Math.max(0, Math.round(staleMinutes))]);
     return { summary, staleMinutes, stale: r.rows.map(mapDepositRow) };
+  }
+
+  async reportDaily(range: ReportRange): Promise<DailyReportRow[]> {
+    const r = await this.q.query(
+      `with t as (
+         select created_at::date as d,
+                coalesce(sum(amount) filter (where kind='deposit'), 0)    as dep,
+                coalesce(sum(amount) filter (where kind='withdrawal'), 0)  as wd
+           from transactions
+          where status = 'success'
+            and ($1::date is null or created_at::date >= $1::date)
+            and ($2::date is null or created_at::date <= $2::date)
+          group by 1),
+       g as (
+         select coalesce(gd.trade_date, po.settled_at::date, po.opened_at::date) as d,
+                coalesce(sum(po.stake), 0)              as turnover,
+                coalesce(sum(po.stake - po.payout), 0)  as ggr
+           from positions po
+           left join game_days gd on gd.id = po.game_day_id
+          where po.status = 'settled'
+            and ($1::date is null or coalesce(gd.trade_date, po.settled_at::date, po.opened_at::date) >= $1::date)
+            and ($2::date is null or coalesce(gd.trade_date, po.settled_at::date, po.opened_at::date) <= $2::date)
+          group by 1)
+       select coalesce(t.d, g.d) as day,
+              coalesce(t.dep, 0) as deposits, coalesce(t.wd, 0) as withdrawals,
+              coalesce(g.turnover, 0) as turnover, coalesce(g.ggr, 0) as ggr
+         from t full outer join g on t.d = g.d
+        order by day asc`,
+      [range.from ?? null, range.to ?? null]);
+    return r.rows.map((x) => ({
+      date: day(x.day), depositsCents: num(x.deposits), withdrawalsCents: num(x.withdrawals),
+      turnoverCents: num(x.turnover), ggrCents: num(x.ggr),
+    }));
+  }
+
+  async reportByUser(range: ReportRange): Promise<UserReportRow[]> {
+    const r = await this.q.query(
+      `with t as (
+         select user_id,
+                coalesce(sum(amount) filter (where kind='deposit'), 0)    as dep,
+                coalesce(sum(amount) filter (where kind='withdrawal'), 0)  as wd
+           from transactions
+          where status = 'success'
+            and ($1::date is null or created_at::date >= $1::date)
+            and ($2::date is null or created_at::date <= $2::date)
+          group by 1),
+       g as (
+         select po.user_id,
+                coalesce(sum(po.stake), 0)              as turnover,
+                coalesce(sum(po.stake - po.payout), 0)  as ggr
+           from positions po
+           left join game_days gd on gd.id = po.game_day_id
+          where po.status = 'settled'
+            and ($1::date is null or coalesce(gd.trade_date, po.settled_at::date, po.opened_at::date) >= $1::date)
+            and ($2::date is null or coalesce(gd.trade_date, po.settled_at::date, po.opened_at::date) <= $2::date)
+          group by 1)
+       select p.id as user_id, p.username,
+              coalesce(t.dep, 0) as deposits, coalesce(t.wd, 0) as withdrawals,
+              coalesce(g.turnover, 0) as turnover, coalesce(g.ggr, 0) as ggr
+         from (select user_id from t union select user_id from g) ids
+         join profiles p on p.id = ids.user_id
+         left join t on t.user_id = ids.user_id
+         left join g on g.user_id = ids.user_id
+        order by ggr desc, user_id asc`,
+      [range.from ?? null, range.to ?? null]);
+    return r.rows.map((x) => ({
+      userId: String(x.user_id), username: String(x.username),
+      depositsCents: num(x.deposits), withdrawalsCents: num(x.withdrawals),
+      turnoverCents: num(x.turnover), ggrCents: num(x.ggr),
+    }));
   }
 }
 
@@ -416,6 +501,56 @@ export class InMemoryAdminRepository implements AdminRepository {
       .slice(0, 100)
       .map(memDepositRow);
     return { summary, staleMinutes, stale };
+  }
+
+  async reportDaily(range: ReportRange): Promise<DailyReportRow[]> {
+    const acc = new Map<string, { dep: number; wd: number; turn: number; ggr: number }>();
+    const bucket = (d: string) => {
+      let b = acc.get(d);
+      if (!b) { b = { dep: 0, wd: 0, turn: 0, ggr: 0 }; acc.set(d, b); }
+      return b;
+    };
+    for (const t of this.payments.adminTransactions()) {
+      if (t.status !== "success") continue;
+      const d = dayOfMs(t.createdAtMs);
+      if (!inRange(d, range)) continue;
+      const b = bucket(d);
+      if (t.kind === "deposit") b.dep += t.amountCents; else b.wd += t.amountCents;
+    }
+    for (const p of this.identity.adminReportPlays()) {
+      if (!inRange(p.period, range)) continue;
+      const b = bucket(p.period);
+      b.turn += p.stakeCents; b.ggr += p.stakeCents - p.payoutCents;
+    }
+    return [...acc.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([date, v]) => ({ date, depositsCents: v.dep, withdrawalsCents: v.wd, turnoverCents: v.turn, ggrCents: v.ggr }));
+  }
+
+  async reportByUser(range: ReportRange): Promise<UserReportRow[]> {
+    const acc = new Map<string, { dep: number; wd: number; turn: number; ggr: number }>();
+    const bucket = (id: string) => {
+      let b = acc.get(id);
+      if (!b) { b = { dep: 0, wd: 0, turn: 0, ggr: 0 }; acc.set(id, b); }
+      return b;
+    };
+    for (const t of this.payments.adminTransactions()) {
+      if (t.status !== "success") continue;
+      if (!inRange(dayOfMs(t.createdAtMs), range)) continue;
+      const b = bucket(t.userId);
+      if (t.kind === "deposit") b.dep += t.amountCents; else b.wd += t.amountCents;
+    }
+    for (const p of this.identity.adminReportPlays()) {
+      if (!inRange(p.period, range)) continue;
+      const b = bucket(p.userId);
+      b.turn += p.stakeCents; b.ggr += p.stakeCents - p.payoutCents;
+    }
+    return [...acc.entries()]
+      .map(([userId, v]) => ({
+        userId, username: this.identity.adminUser(userId)?.username ?? userId,
+        depositsCents: v.dep, withdrawalsCents: v.wd, turnoverCents: v.turn, ggrCents: v.ggr,
+      }))
+      .sort((a, b) => (b.ggrCents - a.ggrCents) || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
   }
 
   private record(actorId: string, actorRole: string, action: string, targetType: string, targetId: string | null, detail: unknown): void {

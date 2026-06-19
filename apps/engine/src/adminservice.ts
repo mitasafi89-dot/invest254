@@ -3,6 +3,7 @@ import type {
   AdminRepository, AdminOverview, AdminUserRow, AdminUserDetail, AdminWithdrawalRow, AdminAuditRow,
   AdminUserListQuery, AdminWithdrawalListQuery, SetUserStatusResult, SetCommissionRateResult,
   AdjustBalanceResult, AdminDepositRow, AdminDepositListQuery, AdminDepositsReconcile,
+  ReportRange, DailyReportRow, UserReportRow,
 } from "./admin.js";
 
 /**
@@ -44,4 +45,10 @@ export class AdminService {
   listDeposits(q: AdminDepositListQuery): Promise<Page<AdminDepositRow>> { return this.repo.listDeposits(q); }
 
   depositsReconcile(staleMinutes: number): Promise<AdminDepositsReconcile> { return this.repo.depositsReconcile(staleMinutes); }
+
+  /** Per-day operator finance report (J4) — deposits/withdrawals + turnover/GGR, oldest day first. */
+  reportDaily(range: ReportRange): Promise<DailyReportRow[]> { return this.repo.reportDaily(range); }
+
+  /** Per-user operator finance report (J4) — same metrics, ordered by GGR desc. */
+  reportByUser(range: ReportRange): Promise<UserReportRow[]> { return this.repo.reportByUser(range); }
 }

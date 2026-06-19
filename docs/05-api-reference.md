@@ -158,6 +158,13 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
   `GET /admin/deposits?status` (deposits monitor — STK statuses with `mpesaReceipt`/`checkoutRequestId`)
   and `GET /admin/deposits/reconcile?staleMinutes` (per-status totals + the non-terminal STK pushes
   older than the window — the reconcile-against-M-Pesa candidates).
+- **Admin reports (J4):** admin-gated, read-only aggregates over `transactions` (successful cash) and
+  settled `positions` (turnover/GGR) — no new schema. `GET /admin/reports/daily?from&to` (one row per
+  calendar day: `depositsCents`, `withdrawalsCents`, `turnoverCents`, `ggrCents`; cash keyed by
+  transaction date, game facts by the position's game-day trade date; oldest day first) and
+  `GET /admin/reports/users?from&to` (the same metrics per user, ordered by GGR desc). `from`/`to` are
+  inclusive `YYYY-MM-DD` bounds (validated). Add `format=csv` to either to download a CSV attachment
+  (`text/csv`) instead of the JSON `{ items }` envelope.
 - **Player + payments + admin (E2):** `/wallet`, `/chat` (GET/POST), `/deposits` +
   `/deposits/mpesa/callback`, `/withdrawals` + `/withdrawals/mpesa/result/:txId`,
   `/admin/withdrawals/:id/approve|reject`.
