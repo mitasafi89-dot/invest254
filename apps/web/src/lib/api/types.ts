@@ -1,0 +1,52 @@
+import type { Cents, Direction, PositionStatus, PositionResult } from '@printpesa/shared';
+
+/** Cursor-paginated list envelope (docs/05 §8). */
+export interface Paginated<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+export interface AuthResult {
+  token: string;
+  userId: string;
+  role: 'player' | 'marketer' | 'admin' | 'superadmin';
+}
+
+export interface MeDto {
+  userId: string;
+  role: AuthResult['role'];
+  username: string;
+  fullName: string | null;
+  dateOfBirth: string | null;
+  kycStatus: 'none' | 'basic' | 'full' | 'rejected';
+  ageVerified: boolean;
+}
+
+export interface WalletDto {
+  real: Cents;
+  bonus: Cents;
+  currency: string;
+}
+
+/** Wire shape of GET /game/config (docs/05 §4). */
+export interface GameConfigDto {
+  currency: string;
+  minStakeCents: Cents;
+  maxStakeCents: Cents;
+  maxMultiplier: number;
+  defaultDurationS: number;
+  tickRateMs: number;
+  rtp: number;
+  timeframesS: number[];
+}
+
+export interface PositionDto {
+  id: string;
+  direction: Direction;
+  stakeCents: Cents;
+  status: PositionStatus;
+  result: PositionResult | null;
+  multiplier: number | null;
+  payoutCents: Cents | null;
+  pnlCents: Cents | null;
+}
