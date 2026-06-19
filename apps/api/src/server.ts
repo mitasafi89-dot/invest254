@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG } from "@printpesa/shared";
 import {
   PgGameRepository, PgEngagementRepository, PgPaymentRepository, PgIdentityRepository,
-  PaymentService, ChatService, ActivityService, AuthService, AffiliateService, makeDarajaClient, makeVerifier, maskHandle,
+  PaymentService, ChatService, ActivityService, AuthService, AffiliateService, AdminService, PgAdminRepository, makeDarajaClient, makeVerifier, maskHandle,
   type GameRepository, type EngagementRepository, type PaymentRepository,
   type Querier, type FairnessRecord,
 } from "@printpesa/engine";
@@ -67,11 +67,13 @@ async function buildDeps(): Promise<ApiDeps> {
     ...(process.env.SUPABASE_JWT_AUD ? { audience: process.env.SUPABASE_JWT_AUD } : {}),
   });
   const affiliate = new AffiliateService(identity, daraja);
+  const admin = new AdminService(new PgAdminRepository(q));
 
   return {
     verifier,
     auth,
     affiliate,
+    admin,
     config: DEFAULT_CONFIG,
     fairnessById: async (gameDayId: number): Promise<FairnessRecord | null> => {
       const r = await q.query(

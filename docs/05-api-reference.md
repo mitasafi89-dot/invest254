@@ -142,6 +142,15 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
   (buckets accrued→paid) or `rejected` (reservation released). Migration-0019 RPCs
   (`fn_affiliate_request_payout` / `_approve_payout` / `_complete_payout` / `_reject_payout`),
   all idempotent under `FOR UPDATE`.
+- **Admin back office (J2):** admin-gated (superadmin satisfies admin). `GET /admin/overview`
+  (KPIs: users by status/role, deposits/withdrawals, wallet liability, affiliate accrued/paid +
+  pending payouts, settled turnover/GGR), `GET /admin/users?role&status&q` and `GET /admin/users/:id`
+  (profile + wallet + turnover/GGR), `POST /admin/users/:id/{suspend|ban|reactivate}` and
+  `PATCH /admin/affiliates/:id/rate` (guarded mutations via the migration-0021 RPCs
+  `fn_admin_set_user_status` / `fn_admin_set_commission_rate` — admin acts on players, only
+  superadmin acts on another admin, no self-action; both audited to `admin_actions`),
+  `GET /admin/withdrawals?status` (queue read) and `GET /admin/audit` (audit trail). All lists
+  cursor-paginated, newest-first.
 - **Player + payments + admin (E2):** `/wallet`, `/chat` (GET/POST), `/deposits` +
   `/deposits/mpesa/callback`, `/withdrawals` + `/withdrawals/mpesa/result/:txId`,
   `/admin/withdrawals/:id/approve|reject`.
@@ -151,5 +160,5 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 
 Not yet implemented (no backing service, or owned elsewhere): full KYC (document upload),
 `/game/ticks`, REST position open/sell, promos/bonuses, admin
-user/report/config/audit endpoints. Daraja IP allow-listing is an edge/infra concern, not
+report/CSV-export + game-config endpoints. Daraja IP allow-listing is an edge/infra concern, not
 enforced in-app.

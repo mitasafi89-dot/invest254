@@ -1,6 +1,6 @@
 import { rtp, type GameConfig, type Cents } from "@printpesa/shared";
 import type {
-  FairnessRecord, ActivityRow, ChatRow, ChatPostResult, PaymentService, AuthService, AffiliateService, Verifier,
+  FairnessRecord, ActivityRow, ChatRow, ChatPostResult, PaymentService, AuthService, AffiliateService, AdminService, Verifier,
   Page, PageQuery, LedgerEntry, PositionRecord, PositionDetail, PositionListQuery, TransactionRecord, TxListQuery,
 } from "@printpesa/engine";
 import { Router, ApiError, serverFrom, type Ctx } from "./http.js";
@@ -8,6 +8,7 @@ import { registerProtectedRoutes } from "./app.payments.js";
 import { registerHistoryRoutes } from "./app.history.js";
 import { registerAuthRoutes } from "./app.auth.js";
 import { registerAffiliateRoutes } from "./app.affiliate.js";
+import { registerAdminRoutes } from "./app.admin.js";
 import type { Server } from "node:http";
 
 /**
@@ -28,6 +29,8 @@ export interface ApiDeps {
   affiliate: Pick<AffiliateService,
     "enroll" | "accrueDaily" | "summary" | "listReferrals" | "listCommissions"
     | "requestPayout" | "approvePayout" | "completePayout" | "rejectPayout">;
+  /** Admin back office (J2): dashboard reads, user status, commission rate, withdrawal queue, audit. */
+  admin: Pick<AdminService, "overview" | "listUsers" | "getUserDetail" | "setUserStatus" | "setCommissionRate" | "listWithdrawals" | "listAudit">;
   /** Public game configuration snapshot source. */
   config: GameConfig;
   /** Public fairness record for a game-day id (commitment always; seed only after reveal). */
@@ -122,6 +125,7 @@ export function createRouter(deps: ApiDeps): Router {
   registerPublicRoutes(router, deps);
   registerAuthRoutes(router, deps);
   registerAffiliateRoutes(router, deps);
+  registerAdminRoutes(router, deps);
   registerProtectedRoutes(router, deps);
   registerHistoryRoutes(router, deps);
   return router;

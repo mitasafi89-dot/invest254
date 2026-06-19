@@ -51,6 +51,19 @@ export interface PayoutApproveResult { approved: boolean; amountCents: number | 
 /** Result of applying an M-Pesa B2C payout result (idempotent). */
 export interface PayoutCompleteResult { applied: boolean; status: string; }
 
+/** A user as the admin back office sees it (J2). */
+export interface AdminUserSnapshot {
+  userId: string; username: string; phone: string; role: string; status: string;
+  fullName: string | null; dateOfBirth: string | null; kycStatus: string;
+  referredBy: string | null; createdAtMs: number;
+}
+/** An affiliate's commission terms for admin reads/mutations (J2). */
+export interface AdminAffiliateSnapshot { userId: string; commissionRate: number; status: string; }
+/** A settled play (turnover/GGR source) for admin aggregation (J2). */
+export interface AdminPlaySnapshot { userId: string; stakeCents: number; payoutCents: number; }
+/** A commission bucket for admin accrued/paid aggregation (J2). */
+export interface AdminCommissionSnapshot { commissionCents: number; status: string; }
+
 export interface IdentityRepository {
   /**
    * Atomically create profile + wallet + credentials. An optional referral code (already
@@ -277,7 +290,7 @@ export class PgIdentityRepository implements IdentityRepository, AffiliateReposi
 interface MemUser {
   userId: string; phone: string; username: string; role: string; status: string;
   passwordHash: string; fullName: string | null; dateOfBirth: string | null; kycStatus: string;
-  referredBy: string | null;
+  referredBy: string | null; createdAtMs: number;
 }
 
 interface MemAffiliate { userId: string; referralCode: string; commissionRate: number; status: string; }
@@ -306,7 +319,7 @@ export class InMemoryIdentityRepository implements IdentityRepository, Affiliate
     if (this.usernames.has(username)) throw new Error("USERNAME_TAKEN");
     const u: MemUser = {
       userId: randomUUID(), phone, username, role: "player", status: "active",
-      passwordHash, fullName: null, dateOfBirth: null, kycStatus: "none", referredBy: null,
+      passwordHash, fullName: null, dateOfBirth: null, kycStatus: "none", referredBy: null, createdAtMs: Date.now(),
     };
     this.byPhone.set(phone, u); this.byId.set(u.userId, u); this.usernames.add(username);
     // First-touch, permanent attribution: an unknown/suspended code is silently ignored.
@@ -483,6 +496,66 @@ export class InMemoryIdentityRepository implements IdentityRepository, Affiliate
   /** Test seam: how many referrals an affiliate has accrued. */
   referralCount(affiliateId: string): number {
     return this.referrals.filter((r) => r.affiliateId === affiliateId).length;
+  }
+
+  // ── Admin back office snapshots & mutations (J2) ─────────────────────────
+  /** All users as admin snapshots. */
+  adminUsers(): AdminUserSnapshot[] {
+    return [...this.byId.values()].map((u) => this.toAdminUser(u));
+  }
+  /** One user snapshot, or null. */
+  adminUser(userId: string): AdminUserSnapshot | null {
+    const u = this.byId.get(userId);
+    return u ? this.toAdminUser(u) : null;
+  }
+  /** Flip an account's status by id (the admin repo enforces the RPC guards before calling this). */
+  adminSetStatus(userId: string, status: string): void {
+    const u = this.byId.get(userId);
+    if (u) u.status = status;
+  }
+  /** Test/admin seam: set a user's role (role management is a DB concern in production). */
+  adminSetRole(userId: string, role: string): void {
+    const u = this.byId.get(userId);
+    if (u) u.role = role;
+  }
+  /** All affiliates' commission terms. */
+  adminAffiliates(): AdminAffiliateSnapshot[] {
+    return [...this.affiliates.values()].map((a) => ({ userId: a.userId, commissionRate: a.commissionRate, status: a.status }));
+  }
+  /** One affiliate's commission terms, or null. */
+  adminAffiliate(userId: string): AdminAffiliateSnapshot | null {
+    const a = this.affiliates.get(userId);
+    return a ? { userId: a.userId, commissionRate: a.commissionRate, status: a.status } : null;
+  }
+  /** Set an affiliate's commission rate (the admin repo enforces the RPC guards first). */
+  adminSetCommissionRate(userId: string, rate: number): void {
+    const a = this.affiliates.get(userId);
+    if (a) a.commissionRate = rate;
+  }
+  /** All settled plays (turnover/GGR aggregation). */
+  adminPlays(): AdminPlaySnapshot[] {
+    return this.plays.map((p) => ({ userId: p.referredUser, stakeCents: p.stakeCents, payoutCents: p.payoutCents }));
+  }
+  /** Settled plays for one user. */
+  adminPlaysOf(userId: string): AdminPlaySnapshot[] {
+    return this.plays.filter((p) => p.referredUser === userId).map((p) => ({ userId: p.referredUser, stakeCents: p.stakeCents, payoutCents: p.payoutCents }));
+  }
+  /** All commission buckets (accrued/paid aggregation). */
+  adminCommissions(): AdminCommissionSnapshot[] {
+    return this.commissions.map((c) => ({ commissionCents: c.commission, status: c.status }));
+  }
+  /** Count of in-flight payout requests (requested|approved). */
+  adminPendingPayoutCount(): number {
+    let n = 0;
+    for (const p of this.payouts.values()) if (p.status === "requested" || p.status === "approved") n += 1;
+    return n;
+  }
+  private toAdminUser(u: MemUser): AdminUserSnapshot {
+    return {
+      userId: u.userId, username: u.username, phone: u.phone, role: u.role, status: u.status,
+      fullName: u.fullName, dateOfBirth: u.dateOfBirth, kycStatus: u.kycStatus,
+      referredBy: u.referredBy, createdAtMs: u.createdAtMs,
+    };
   }
 }
 

@@ -55,3 +55,22 @@ written to `audit_log` (actor, before/after).
 | Affiliate payouts | — | ✓ | ✓ |
 | Promos/bonuses | — | — | ✓ |
 | Audit log | — | view | ✓ |
+
+
+## 3. Implementation status (J2)
+
+The REST surface in `apps/api` ships the first admin slice (admin-gated; superadmin satisfies admin):
+
+| Endpoint | Module | Notes |
+|----------|--------|-------|
+| `GET /admin/overview` | 1.1 Dashboard | KPI aggregates (users, finance, affiliate, game). |
+| `GET /admin/users` · `GET /admin/users/:id` | 1.2 User mgmt | search/filter (`role`,`status`,`q`); detail adds wallet + turnover/GGR. |
+| `POST /admin/users/:id/{suspend\|ban\|reactivate}` | 1.2 User mgmt | `fn_admin_set_user_status` (0021); admin->players, superadmin->admins, no self-action; audited. |
+| `PATCH /admin/affiliates/:id/rate` | 1.5 Affiliates | `fn_admin_set_commission_rate` (0021); 0..1; audited. |
+| `GET /admin/withdrawals` | 1.3 Finance | withdrawal-queue read (`status` filter). |
+| `GET /admin/audit` | 1.8 Audit log | `admin_actions` trail, newest-first. |
+
+Every mutation writes an immutable `admin_actions` row (actor, role, before/after). Still to come:
+manual balance adjustment, deposits monitor + reconciliation, reports/CSV, game config + RTP monitor +
+seed rotation, affiliate payout approve/reject UI (RPCs already live, I4), engagement/chat moderation,
+and bonuses/promos.

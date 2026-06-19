@@ -24,4 +24,6 @@ export * from "./activityservice.js";
 export * from "./chatservice.js";
 export * from "./payments.js";
 export * from "./paymentservice.js";
+export * from "./admin.js";
+export * from "./adminservice.js";
 export * from "./daraja.js";

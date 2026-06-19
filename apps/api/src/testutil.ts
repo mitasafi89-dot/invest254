@@ -2,7 +2,7 @@ import type { AddressInfo } from "node:net";
 import { DEFAULT_CONFIG, type Cents } from "@printpesa/shared";
 import {
   InMemoryEngagementRepository, InMemoryPaymentRepository, InMemoryGameRepository, StubDarajaClient,
-  InMemoryIdentityRepository, PaymentService, ChatService, ActivityService, AuthService, AffiliateService, maskHandle,
+  InMemoryIdentityRepository, PaymentService, ChatService, ActivityService, AuthService, AffiliateService, AdminService, InMemoryAdminRepository, maskHandle,
   type FairnessRecord, type AuthClaims, type Verifier,
 } from "@printpesa/engine";
 import { createApp, type ApiDeps, type WalletBalance } from "./app.js";
@@ -81,11 +81,13 @@ export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> 
   const identity = new InMemoryIdentityRepository();
   const auth = new AuthService(identity, { jwtSecret: "test-secret-which-is-long-enough-123456", jwtTtlSeconds: 3600 });
   const affiliate = new AffiliateService(identity, daraja);
+  const admin = new AdminService(new InMemoryAdminRepository(identity, payRepo));
 
   const deps: ApiDeps = {
     verifier: stubVerifier(),
     auth,
     affiliate,
+    admin,
     config: DEFAULT_CONFIG,
     fairnessById: async (id) => fairness.get(id) ?? null,
     activity: { recent: (limit) => engage.listRecentActivity(limit) },

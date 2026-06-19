@@ -21,6 +21,8 @@ export interface TransactionRecord {
 }
 /** Filters for a player's transaction history. */
 export interface TxListQuery extends PageQuery { kind?: "deposit" | "withdrawal" | undefined; status?: string | undefined; }
+/** A transaction as the admin back office sees it (J2). */
+export interface AdminTxSnapshot { txId: string; userId: string; kind: "deposit" | "withdrawal"; amountCents: Cents; status: string; phone: string; createdAtMs: number; }
 
 export interface PaymentRepository {
   getBalance(userId: string): Promise<Cents>;
@@ -139,6 +141,20 @@ export class InMemoryPaymentRepository implements PaymentRepository {
       })),
       nextCursor: page.nextCursor,
     };
+  }
+
+  // ── Admin back office snapshots (J2) ──────────────────────────────────────
+  /** All transactions as admin rows (withdrawal queue + finance aggregates). */
+  adminTransactions(): AdminTxSnapshot[] {
+    return [...this.txns.values()].map((t) => ({
+      txId: t.id, userId: t.userId, kind: t.kind, amountCents: t.amount, status: t.status, phone: t.phone, createdAtMs: t.createdAtMs,
+    }));
+  }
+  /** Total real-balance liability across all wallets. */
+  adminWalletLiabilityCents(): Cents {
+    let sum = 0;
+    for (const v of this.balances.values()) sum += v;
+    return sum;
   }
 }
 
