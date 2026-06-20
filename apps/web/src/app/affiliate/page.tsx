@@ -100,7 +100,8 @@ function ApplyCard() {
         <h2 className="text-base font-semibold">Join the affiliate programme</h2>
         <p className="text-sm leading-relaxed text-muted">
           Get a personal referral link and earn <strong className="text-fg">20%</strong> of the net
-          revenue from every player you bring to PrintPesa — accrued daily, paid to your M-Pesa.
+          revenue from every player you bring to PrintPesa — accrued daily, paid to your M-Pesa. You
+          keep your full player account and can carry on trading as normal.
         </p>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -221,7 +222,7 @@ function EarningsHero({ summary }: { summary: AffiliateSummary }) {
     <Card className="flex flex-col gap-4 bg-gradient-to-br from-accent/10 to-transparent">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col">
-          <span className="text-xs uppercase tracking-wide text-muted">Available to withdraw</span>
+          <span className="text-xs uppercase tracking-wide text-muted">Commission available</span>
           <span className="text-3xl font-bold tabular-nums text-fg">
             <Money cents={summary.availableCents} />
           </span>
@@ -238,6 +239,14 @@ function EarningsHero({ summary }: { summary: AffiliateSummary }) {
       <Button onClick={request} disabled={!canRequest || payout.isPending} fullWidth>
         {payout.isPending ? 'Requesting…' : canRequest ? 'Request payout' : 'Nothing to withdraw yet'}
       </Button>
+      <p className="text-[11px] leading-relaxed text-muted">
+        Affiliate earnings, paid to your M-Pesa — <strong className="text-fg">separate</strong> from
+        your playing balance. You can still{' '}
+        <a href="/wallet" className="text-accent hover:underline">
+          deposit &amp; trade
+        </a>{' '}
+        as a player; your own play never earns you commission.
+      </p>
     </Card>
   );
 }
