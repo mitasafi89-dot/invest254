@@ -1,11 +1,9 @@
- 'use client';
+'use client';
 
-import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WalletWidget } from '@/components/wallet/WalletWidget';
-import { WithdrawModal } from '@/components/wallet/WithdrawModal';
 import { HistoryTabs } from '@/components/wallet/HistoryTabs';
 import { useSession } from '@/lib/auth/session';
 import { useAuthUi } from '@/lib/auth/ui';
@@ -17,7 +15,7 @@ export default function WalletPage() {
   const token = useSession((s) => s.token);
   const openAuth = useAuthUi((s) => s.openAuth);
   const openDeposit = useDepositUi((s) => s.openDeposit);
-  const [modal, setModal] = useState<'withdraw' | null>(null);
+  const openWithdraw = useDepositUi((s) => s.openWithdraw);
 
   if (!hydrated) return <Skeleton className="h-48 w-full" />;
 
@@ -39,13 +37,11 @@ export default function WalletPage() {
 
       <div className="grid grid-cols-2 gap-3">
         <Button size="lg" onClick={() => openDeposit()}>Deposit</Button>
-        <Button size="lg" variant="secondary" onClick={() => setModal('withdraw')}>Withdraw</Button>
+        <Button size="lg" variant="secondary" onClick={openWithdraw}>Withdraw</Button>
       </div>
 
       <h2 className="mt-2 text-base font-semibold">History</h2>
       <HistoryTabs />
-
-      <WithdrawModal open={modal === 'withdraw'} onClose={() => setModal(null)} />
     </section>
   );
 }
