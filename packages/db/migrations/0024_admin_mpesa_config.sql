@@ -83,17 +83,17 @@ begin
   if v_before is null then raise exception 'NOT_FOUND'; end if;
 
   update public.mpesa_config set
-    environment             = coalesce(p_patch->>'environment',    environment),
-    shortcode               = coalesce(p_patch->>'shortcode',      shortcode),
-    stk_callback_url        = coalesce(p_patch->>'stkCallbackUrl', stk_callback_url),
-    b2c_initiator           = coalesce(p_patch->>'b2cInitiator',   b2c_initiator),
-    b2c_result_url          = coalesce(p_patch->>'b2cResultUrl',   b2c_result_url),
-    b2c_timeout_url         = coalesce(p_patch->>'b2cTimeoutUrl',  b2c_timeout_url),
+    environment             = coalesce(p_patch->>'environment',    mpesa_config.environment),
+    shortcode               = coalesce(p_patch->>'shortcode',      mpesa_config.shortcode),
+    stk_callback_url        = coalesce(p_patch->>'stkCallbackUrl', mpesa_config.stk_callback_url),
+    b2c_initiator           = coalesce(p_patch->>'b2cInitiator',   mpesa_config.b2c_initiator),
+    b2c_result_url          = coalesce(p_patch->>'b2cResultUrl',   mpesa_config.b2c_result_url),
+    b2c_timeout_url         = coalesce(p_patch->>'b2cTimeoutUrl',  mpesa_config.b2c_timeout_url),
     -- secrets: only overwrite when a non-empty value is supplied
-    consumer_key            = case when coalesce(p_patch->>'consumerKey','') <> ''        then p_patch->>'consumerKey'        else consumer_key end,
-    consumer_secret         = case when coalesce(p_patch->>'consumerSecret','') <> ''     then p_patch->>'consumerSecret'     else consumer_secret end,
-    passkey                 = case when coalesce(p_patch->>'passkey','') <> ''            then p_patch->>'passkey'            else passkey end,
-    b2c_security_credential = case when coalesce(p_patch->>'securityCredential','') <> '' then p_patch->>'securityCredential' else b2c_security_credential end,
+    consumer_key            = case when coalesce(p_patch->>'consumerKey','') <> ''        then p_patch->>'consumerKey'        else mpesa_config.consumer_key end,
+    consumer_secret         = case when coalesce(p_patch->>'consumerSecret','') <> ''     then p_patch->>'consumerSecret'     else mpesa_config.consumer_secret end,
+    passkey                 = case when coalesce(p_patch->>'passkey','') <> ''            then p_patch->>'passkey'            else mpesa_config.passkey end,
+    b2c_security_credential = case when coalesce(p_patch->>'securityCredential','') <> '' then p_patch->>'securityCredential' else mpesa_config.b2c_security_credential end,
     updated_by              = p_actor
   where id = 1
   returning * into v_after;

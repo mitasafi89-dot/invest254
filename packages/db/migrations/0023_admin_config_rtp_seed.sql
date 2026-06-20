@@ -35,14 +35,14 @@ begin
   if v_before is null then raise exception 'NOT_FOUND'; end if;
   begin
     update public.game_config set
-      house_edge         = coalesce((p_patch->>'houseEdge')::numeric,        house_edge),
-      max_multiplier     = coalesce((p_patch->>'maxMultiplier')::numeric,    max_multiplier),
-      min_stake          = coalesce((p_patch->>'minStakeCents')::bigint,     min_stake),
-      max_stake          = coalesce((p_patch->>'maxStakeCents')::bigint,     max_stake),
-      default_duration_s = coalesce((p_patch->>'defaultDurationS')::int,     default_duration_s),
-      tick_rate_ms       = coalesce((p_patch->>'tickRateMs')::int,           tick_rate_ms),
-      drift_bias         = coalesce((p_patch->>'driftBias')::numeric,        drift_bias),
-      volatility         = coalesce((p_patch->>'volatility')::numeric,       volatility),
+      house_edge         = coalesce((p_patch->>'houseEdge')::numeric,        game_config.house_edge),
+      max_multiplier     = coalesce((p_patch->>'maxMultiplier')::numeric,    game_config.max_multiplier),
+      min_stake          = coalesce((p_patch->>'minStakeCents')::bigint,     game_config.min_stake),
+      max_stake          = coalesce((p_patch->>'maxStakeCents')::bigint,     game_config.max_stake),
+      default_duration_s = coalesce((p_patch->>'defaultDurationS')::int,     game_config.default_duration_s),
+      tick_rate_ms       = coalesce((p_patch->>'tickRateMs')::int,           game_config.tick_rate_ms),
+      drift_bias         = coalesce((p_patch->>'driftBias')::numeric,        game_config.drift_bias),
+      volatility         = coalesce((p_patch->>'volatility')::numeric,       game_config.volatility),
       updated_by         = p_actor
     where id = 1
     returning * into v_after;
