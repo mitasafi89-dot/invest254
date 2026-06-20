@@ -193,6 +193,44 @@ test("J5 game config: admin reads; only superadmin edits; validates; audited", a
   } finally { await api.close(); }
 });
 
+test("M-Pesa config: admin reads masked; only superadmin edits; secrets write-only; audited", async () => {
+  const api = await startTestApi();
+  try {
+    // admin can read; defaults are empty and secrets are masked to has_* flags (never returned raw)
+    const cfg = await json(await req(api, "GET", "/api/v1/admin/mpesa-config", { token: "admin-1:admin" }));
+    assert.equal(cfg.environment, "sandbox");
+    assert.equal(cfg.shortcode, "");
+    assert.equal(cfg.hasConsumerKey, false);
+    assert.equal(cfg.consumerKey, undefined); // raw secret never present on the wire
+
+    // a day-to-day admin cannot edit (superadmin only)
+    assert.equal((await req(api, "PATCH", "/api/v1/admin/mpesa-config", { token: "admin-1:admin", body: { shortcode: "174379" } })).status, 403);
+
+    // superadmin sets plain fields + a secret; response stays masked, secret reflected as has_*=true
+    const upd = await req(api, "PATCH", "/api/v1/admin/mpesa-config", {
+      token: "root:superadmin",
+      body: { environment: "production", shortcode: "174379", consumerKey: "ck_live_abc", stkCallbackUrl: "https://x/cb" },
+    });
+    assert.equal(upd.status, 200);
+    const u = await json(upd);
+    assert.equal(u.environment, "production");
+    assert.equal(u.shortcode, "174379");
+    assert.equal(u.stkCallbackUrl, "https://x/cb");
+    assert.equal(u.hasConsumerKey, true);
+    assert.equal(u.consumerKey, undefined);
+
+    // omitting/empty a secret keeps the existing one; bad environment + empty patch -> 400
+    const keep = await json(await req(api, "PATCH", "/api/v1/admin/mpesa-config", { token: "root:superadmin", body: { consumerSecret: "" , shortcode: "600000" } }));
+    assert.equal(keep.hasConsumerKey, true); // unchanged
+    assert.equal(keep.shortcode, "600000");
+    assert.equal((await req(api, "PATCH", "/api/v1/admin/mpesa-config", { token: "root:superadmin", body: { environment: "nope" } })).status, 400);
+    assert.equal((await req(api, "PATCH", "/api/v1/admin/mpesa-config", { token: "root:superadmin", body: {} })).status, 400);
+
+    const audit = await json(await req(api, "GET", "/api/v1/admin/audit", { token: "root:superadmin" }));
+    assert.ok(audit.items.some((a: any) => a.action === "mpesa.config"));
+  } finally { await api.close(); }
+});
+
 test("J5 RTP monitor: target derived from house_edge, rolling windows, no alert on empty data", async () => {
   const api = await startTestApi();
   try {

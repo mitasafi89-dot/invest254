@@ -33,7 +33,7 @@ export interface ApiDeps {
   admin: Pick<AdminService,
     "overview" | "listUsers" | "getUserDetail" | "setUserStatus" | "setCommissionRate" | "listWithdrawals" | "listAudit"
     | "adjustBalance" | "listDeposits" | "depositsReconcile" | "reportDaily" | "reportByUser"
-    | "getGameConfig" | "updateGameConfig" | "rtpMonitor" | "listSeeds" | "rotateSeed"
+    | "getGameConfig" | "updateGameConfig" | "getMpesaConfig" | "updateMpesaConfig" | "rtpMonitor" | "listSeeds" | "rotateSeed"
     | "listAffiliatePayouts" | "listChat" | "hideChat" | "unhideChat" | "recordAction">;
   /** Public game configuration snapshot source. */
   config: GameConfig;

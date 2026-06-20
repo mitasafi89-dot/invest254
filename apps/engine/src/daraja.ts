@@ -95,20 +95,39 @@ export class HttpDarajaClient implements DarajaClient {
   }
 }
 
-/** Build the real client when fully configured; otherwise the deterministic stub. */
-export function makeDarajaClient(env: NodeJS.ProcessEnv = process.env): DarajaClient {
-  const { MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY } = env;
-  if (MPESA_CONSUMER_KEY && MPESA_CONSUMER_SECRET && MPESA_SHORTCODE && MPESA_PASSKEY) {
-    const cfg: DarajaConfig = {
-      env: (env.MPESA_ENV as DarajaConfig["env"]) ?? "sandbox",
-      consumerKey: MPESA_CONSUMER_KEY, consumerSecret: MPESA_CONSUMER_SECRET,
-      shortcode: MPESA_SHORTCODE, passkey: MPESA_PASSKEY,
-      stkCallbackUrl: env.MPESA_STK_CALLBACK_URL ?? "",
-      b2cInitiator: env.MPESA_B2C_INITIATOR ?? "", b2cSecurityCredential: env.MPESA_B2C_SECURITY_CREDENTIAL ?? "",
-      b2cResultUrl: env.MPESA_B2C_RESULT_URL ?? "", b2cTimeoutUrl: env.MPESA_B2C_TIMEOUT_URL ?? "",
-    };
+/** Resolve the full Daraja config by layering DB overrides over env defaults (DB wins per field). */
+function resolveDarajaConfig(over: Partial<DarajaConfig>, env: NodeJS.ProcessEnv): DarajaConfig {
+  const pick = (k: keyof DarajaConfig, envKey: string): string =>
+    (over[k] as string | undefined) ?? env[envKey] ?? "";
+  return {
+    env: over.env ?? (env.MPESA_ENV as DarajaConfig["env"]) ?? "sandbox",
+    consumerKey: pick("consumerKey", "MPESA_CONSUMER_KEY"),
+    consumerSecret: pick("consumerSecret", "MPESA_CONSUMER_SECRET"),
+    shortcode: pick("shortcode", "MPESA_SHORTCODE"),
+    passkey: pick("passkey", "MPESA_PASSKEY"),
+    stkCallbackUrl: pick("stkCallbackUrl", "MPESA_STK_CALLBACK_URL"),
+    b2cInitiator: pick("b2cInitiator", "MPESA_B2C_INITIATOR"),
+    b2cSecurityCredential: pick("b2cSecurityCredential", "MPESA_B2C_SECURITY_CREDENTIAL"),
+    b2cResultUrl: pick("b2cResultUrl", "MPESA_B2C_RESULT_URL"),
+    b2cTimeoutUrl: pick("b2cTimeoutUrl", "MPESA_B2C_TIMEOUT_URL"),
+  };
+}
+
+/**
+ * Build the real client when the four required credentials resolve (DB config preferred, env as
+ * fallback); otherwise the deterministic stub. `over` carries admin-managed DB values; pass `{}`
+ * (the default) for pure env behaviour — used by makeDarajaClient below.
+ */
+export function makeDarajaClientFromConfig(over: Partial<DarajaConfig> = {}, env: NodeJS.ProcessEnv = process.env): DarajaClient {
+  const cfg = resolveDarajaConfig(over, env);
+  if (cfg.consumerKey && cfg.consumerSecret && cfg.shortcode && cfg.passkey) {
     return new HttpDarajaClient(cfg);
   }
   console.warn("[payments] Daraja credentials not configured — using StubDarajaClient (no real M-Pesa calls).");
   return new StubDarajaClient();
+}
+
+/** Build the real client from env only when fully configured; otherwise the deterministic stub. */
+export function makeDarajaClient(env: NodeJS.ProcessEnv = process.env): DarajaClient {
+  return makeDarajaClientFromConfig({}, env);
 }

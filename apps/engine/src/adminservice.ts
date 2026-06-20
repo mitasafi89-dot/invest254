@@ -5,6 +5,7 @@ import type {
   AdjustBalanceResult, AdminDepositRow, AdminDepositListQuery, AdminDepositsReconcile,
   ReportRange, DailyReportRow, UserReportRow,
   GameConfigRow, GameConfigPatch, RtpMonitor, AdminSeedRow, SeedRotateResult,
+  MpesaConfigRow, MpesaConfigPatch,
   AdminPayoutRow, AdminPayoutListQuery, AdminChatModRow,
 } from "./admin.js";
 
@@ -62,6 +63,14 @@ export class AdminService {
   /** Edit game_config (J5; superadmin) — partial patch; guards + validation + audit live in the repo/RPC. */
   updateGameConfig(actorId: string, actorRole: string, patch: GameConfigPatch): Promise<GameConfigRow> {
     return this.repo.updateGameConfig(actorId, actorRole, patch);
+  }
+
+  /** Admin-visible M-Pesa config (secrets masked). */
+  getMpesaConfig(): Promise<MpesaConfigRow> { return this.repo.getMpesaConfig(); }
+
+  /** Edit M-Pesa config (superadmin) — partial patch; secret fields write-only; audited in the repo/RPC. */
+  updateMpesaConfig(actorId: string, actorRole: string, patch: MpesaConfigPatch): Promise<MpesaConfigRow> {
+    return this.repo.updateMpesaConfig(actorId, actorRole, patch);
   }
 
   /** Realised RTP vs target across rolling windows, with a drift alert (J5). */

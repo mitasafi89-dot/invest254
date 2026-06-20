@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG } from "@printpesa/shared";
 import {
   PgGameRepository, PgEngagementRepository, PgPaymentRepository, PgIdentityRepository,
-  PaymentService, ChatService, ActivityService, AuthService, AffiliateService, AdminService, PgAdminRepository, makeDarajaClient, makeVerifier, maskHandle,
+  PaymentService, ChatService, ActivityService, AuthService, AffiliateService, AdminService, PgAdminRepository, makeDarajaClientFromConfig, loadDarajaConfigFromDb, makeVerifier, maskHandle,
   type GameRepository, type EngagementRepository, type PaymentRepository,
   type Querier, type FairnessRecord,
 } from "@printpesa/engine";
@@ -41,7 +41,8 @@ async function buildDeps(): Promise<ApiDeps> {
   const resolveHandle = async (userId: string): Promise<string> =>
     (await engage.getUsername(userId)) ?? `guest_${userId.slice(0, 6)}`;
 
-  const daraja = makeDarajaClient();
+  // M-Pesa config is admin-managed in the DB (table 0024); fall back to env per field.
+  const daraja = makeDarajaClientFromConfig(await loadDarajaConfigFromDb(q));
   const payments = new PaymentService(payRepo, daraja, {
     events: {
       onWithdrawalSuccess: ({ userId, amountCents }) => {

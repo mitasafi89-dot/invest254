@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query';
 import { adminApi } from '@/lib/admin/endpoints';
 import type { Paginated } from '@/lib/api/types';
+import type { MpesaConfigPatch } from '@/lib/admin/types';
 import { useSession } from '@/lib/auth/session';
 
 /** Bearer token for admin calls. */
@@ -155,6 +156,20 @@ export function useUpdateGameConfig() {
       void qc.invalidateQueries({ queryKey: ['admin', 'game-config'] });
       void qc.invalidateQueries({ queryKey: ['admin', 'rtp'] });
     },
+  });
+}
+
+// ── M-Pesa config ──
+export function useMpesaConfig() {
+  const t = useTok();
+  return useQuery({ queryKey: ['admin', 'mpesa-config'], queryFn: () => adminApi.mpesaConfig(t), enabled: !!t });
+}
+export function useUpdateMpesaConfig() {
+  const t = useTok();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: MpesaConfigPatch) => adminApi.updateMpesaConfig(t, patch),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'mpesa-config'] }),
   });
 }
 export function useSeeds() {

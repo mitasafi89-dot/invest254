@@ -180,3 +180,30 @@ export interface AdminAuditRow {
   detail: unknown;
   createdAtMs: number;
 }
+
+export interface MpesaConfigRow {
+  environment: 'sandbox' | 'production';
+  shortcode: string;
+  stkCallbackUrl: string;
+  b2cInitiator: string;
+  b2cResultUrl: string;
+  b2cTimeoutUrl: string;
+  hasConsumerKey: boolean;
+  hasConsumerSecret: boolean;
+  hasPasskey: boolean;
+  hasSecurityCredential: boolean;
+  updatedBy: string | null;
+  updatedAtMs: number;
+}
+export interface MpesaConfigPatch {
+  environment?: 'sandbox' | 'production';
+  shortcode?: string;
+  stkCallbackUrl?: string;
+  b2cInitiator?: string;
+  b2cResultUrl?: string;
+  b2cTimeoutUrl?: string;
+  consumerKey?: string;
+  consumerSecret?: string;
+  passkey?: string;
+  securityCredential?: string;
+}

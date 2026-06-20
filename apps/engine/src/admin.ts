@@ -4,6 +4,7 @@ import { type Page, type PageQuery, clampLimit, decodeKeyset, pageFrom } from ".
 import type { InMemoryIdentityRepository } from "./identity.js";
 import type { InMemoryPaymentRepository } from "./payments.js";
 import { InMemoryEngagementRepository } from "./engagement.js";
+import type { DarajaConfig } from "./daraja.js";
 
 /**
  * Admin back office (J2) — the operator domain seam the HTTP API binds to. Read aggregates
@@ -79,6 +80,36 @@ export interface AdminSeedRow { gameDayId: number | null; tradeDate: string; ser
 /** Result of a superadmin-forced seed rotation (J5): the day and its new (bumped) seed version. */
 export interface SeedRotateResult { tradeDate: string; seedVersion: number; }
 
+// ── M-Pesa (Daraja) configuration — admin-managed; secrets write-only ───────────────────────
+/** Admin-visible M-Pesa config. Secrets are never returned — only `has_*` presence flags. */
+export interface MpesaConfigRow {
+  environment: "sandbox" | "production";
+  shortcode: string;
+  stkCallbackUrl: string;
+  b2cInitiator: string;
+  b2cResultUrl: string;
+  b2cTimeoutUrl: string;
+  hasConsumerKey: boolean;
+  hasConsumerSecret: boolean;
+  hasPasskey: boolean;
+  hasSecurityCredential: boolean;
+  updatedBy: string | null;
+  updatedAtMs: number;
+}
+/** Partial M-Pesa config edit (superadmin). Secret fields are write-only: omit/empty keeps current. */
+export interface MpesaConfigPatch {
+  environment?: "sandbox" | "production";
+  shortcode?: string;
+  stkCallbackUrl?: string;
+  b2cInitiator?: string;
+  b2cResultUrl?: string;
+  b2cTimeoutUrl?: string;
+  consumerKey?: string;
+  consumerSecret?: string;
+  passkey?: string;
+  securityCredential?: string;
+}
+
 // ── J6: affiliate payout queue + chat moderation ───────────────────────────────────────────────
 /** A payout request in the admin approve/reject queue (J6). */
 export interface AdminPayoutRow { payoutId: string; affiliateId: string; username: string; phone: string; amountCents: Cents; status: string; approvedBy: string | null; createdAtMs: number; }
@@ -103,6 +134,8 @@ export interface AdminRepository {
   // J5 — game config + RTP monitor + seed rotation (superadmin mutations guarded in the RPC/mirror)
   getGameConfig(): Promise<GameConfigRow>;
   updateGameConfig(actorId: string, actorRole: string, patch: GameConfigPatch): Promise<GameConfigRow>;
+  getMpesaConfig(): Promise<MpesaConfigRow>;
+  updateMpesaConfig(actorId: string, actorRole: string, patch: MpesaConfigPatch): Promise<MpesaConfigRow>;
   rtpMonitor(): Promise<RtpMonitor>;
   listSeeds(limit: number): Promise<AdminSeedRow[]>;
   rotateSeed(actorId: string, actorRole: string, tradeDate: string): Promise<SeedRotateResult>;
@@ -163,6 +196,73 @@ function defaultGameConfigRow(): GameConfigRow {
     defaultDurationS: c.defaultDurationS, tickRateMs: c.tickRateMs, driftBias: c.driftBias, volatility: c.volatility,
     rtpTarget: 1 - c.houseEdge, updatedBy: null, updatedAtMs: Date.now(),
   };
+}
+
+/** Internal (unmasked) M-Pesa config — only used by the in-memory mirror and the DB loader shape. */
+interface MpesaInternal {
+  environment: "sandbox" | "production";
+  shortcode: string; consumerKey: string; consumerSecret: string; passkey: string;
+  stkCallbackUrl: string; b2cInitiator: string; b2cSecurityCredential: string;
+  b2cResultUrl: string; b2cTimeoutUrl: string;
+  updatedBy: string | null; updatedAtMs: number;
+}
+function defaultMpesaInternal(): MpesaInternal {
+  return {
+    environment: "sandbox", shortcode: "", consumerKey: "", consumerSecret: "", passkey: "",
+    stkCallbackUrl: "", b2cInitiator: "", b2cSecurityCredential: "", b2cResultUrl: "", b2cTimeoutUrl: "",
+    updatedBy: null, updatedAtMs: Date.now(),
+  };
+}
+function maskMpesaInternal(m: MpesaInternal): MpesaConfigRow {
+  return {
+    environment: m.environment, shortcode: m.shortcode, stkCallbackUrl: m.stkCallbackUrl,
+    b2cInitiator: m.b2cInitiator, b2cResultUrl: m.b2cResultUrl, b2cTimeoutUrl: m.b2cTimeoutUrl,
+    hasConsumerKey: m.consumerKey !== "", hasConsumerSecret: m.consumerSecret !== "",
+    hasPasskey: m.passkey !== "", hasSecurityCredential: m.b2cSecurityCredential !== "",
+    updatedBy: m.updatedBy, updatedAtMs: m.updatedAtMs,
+  };
+}
+/** Map a masked mpesa_config row (plain select or RPC return) to the wire DTO. */
+function mapMpesaConfigRow(x: any): MpesaConfigRow {
+  return {
+    environment: x.environment === "production" ? "production" : "sandbox",
+    shortcode: String(x.shortcode ?? ""),
+    stkCallbackUrl: String(x.stk_callback_url ?? ""),
+    b2cInitiator: String(x.b2c_initiator ?? ""),
+    b2cResultUrl: String(x.b2c_result_url ?? ""),
+    b2cTimeoutUrl: String(x.b2c_timeout_url ?? ""),
+    hasConsumerKey: Boolean(x.has_consumer_key),
+    hasConsumerSecret: Boolean(x.has_consumer_secret),
+    hasPasskey: Boolean(x.has_passkey),
+    hasSecurityCredential: Boolean(x.has_security_credential),
+    updatedBy: x.updated_by == null ? null : String(x.updated_by),
+    updatedAtMs: ms(x.updated_at),
+  };
+}
+
+/** Read the raw M-Pesa config (incl. secrets) so the engine can build the Daraja client at
+ *  startup. Returns only NON-EMPTY fields, letting the caller fall back to env per field. Any
+ *  failure (e.g. table not yet migrated) yields {} → pure env behaviour, never a crash. */
+export async function loadDarajaConfigFromDb(q: Querier): Promise<Partial<DarajaConfig>> {
+  try {
+    const r = await q.query(
+      `select environment, shortcode, consumer_key, consumer_secret, passkey, stk_callback_url,
+              b2c_initiator, b2c_security_credential, b2c_result_url, b2c_timeout_url
+         from mpesa_config where id = 1`, []);
+    if (!r.rows.length) return {};
+    const x = r.rows[0] as Record<string, string | null>;
+    const out: Partial<DarajaConfig> = {};
+    if (x.environment === "sandbox" || x.environment === "production") out.env = x.environment;
+    const put = (k: keyof DarajaConfig, v: string | null | undefined) => { if (v) (out as any)[k] = v; };
+    put("shortcode", x.shortcode); put("consumerKey", x.consumer_key); put("consumerSecret", x.consumer_secret);
+    put("passkey", x.passkey); put("stkCallbackUrl", x.stk_callback_url); put("b2cInitiator", x.b2c_initiator);
+    put("b2cSecurityCredential", x.b2c_security_credential); put("b2cResultUrl", x.b2c_result_url);
+    put("b2cTimeoutUrl", x.b2c_timeout_url);
+    return out;
+  } catch (e) {
+    console.warn("[payments] loadDarajaConfigFromDb failed; using env only:", (e as Error).message);
+    return {};
+  }
 }
 
 /** Mirror the game_config CHECK constraints; raises INVALID_CONFIG on any violation (J5). */
@@ -439,6 +539,27 @@ export class PgAdminRepository implements AdminRepository {
     } catch (e) { mapAdminError(e); }
   }
 
+  async getMpesaConfig(): Promise<MpesaConfigRow> {
+    const r = await this.q.query(
+      `select environment, shortcode, stk_callback_url, b2c_initiator, b2c_result_url, b2c_timeout_url,
+              (consumer_key <> '') as has_consumer_key, (consumer_secret <> '') as has_consumer_secret,
+              (passkey <> '') as has_passkey, (b2c_security_credential <> '') as has_security_credential,
+              updated_by, updated_at from mpesa_config where id = 1`, []);
+    if (!r.rows.length) throw new Error("NOT_FOUND");
+    return mapMpesaConfigRow(r.rows[0]);
+  }
+
+  async updateMpesaConfig(actorId: string, actorRole: string, patch: MpesaConfigPatch): Promise<MpesaConfigRow> {
+    try {
+      const r = await this.q.query(
+        `select environment, shortcode, stk_callback_url, b2c_initiator, b2c_result_url, b2c_timeout_url,
+                has_consumer_key, has_consumer_secret, has_passkey, has_security_credential, updated_by, updated_at
+           from fn_admin_update_mpesa_config($1,$2,$3::jsonb)`,
+        [actorId, actorRole, JSON.stringify(patch)]);
+      return mapMpesaConfigRow(r.rows[0]);
+    } catch (e) { mapAdminError(e); }
+  }
+
   async rtpMonitor(): Promise<RtpMonitor> {
     const cfg = await this.getGameConfig();
     const r = await this.q.query(
@@ -573,6 +694,7 @@ export class InMemoryAdminRepository implements AdminRepository {
   private readonly audit: MemAudit[] = [];
   private seq = 0;
   private gameConfig: GameConfigRow = defaultGameConfigRow();
+  private mpesa: MpesaInternal = defaultMpesaInternal();
   private readonly seedRows = new Map<string, AdminSeedRow>();
   constructor(
     private readonly identity: InMemoryIdentityRepository,
@@ -790,6 +912,32 @@ export class InMemoryAdminRepository implements AdminRepository {
     this.gameConfig = next;
     this.record(actorId, actorRole, "game.config", "game_config", "1", { before, after: next, patch });
     return { ...next };
+  }
+
+  async getMpesaConfig(): Promise<MpesaConfigRow> { return maskMpesaInternal(this.mpesa); }
+
+  async updateMpesaConfig(actorId: string, actorRole: string, patch: MpesaConfigPatch): Promise<MpesaConfigRow> {
+    if (actorRole !== "superadmin") throw new Error("NOT_AUTHORIZED");
+    if (patch.environment !== undefined && patch.environment !== "sandbox" && patch.environment !== "production") {
+      throw new Error("INVALID_CONFIG");
+    }
+    const before = maskMpesaInternal(this.mpesa);
+    const m: MpesaInternal = { ...this.mpesa };
+    if (patch.environment !== undefined) m.environment = patch.environment;
+    if (patch.shortcode !== undefined) m.shortcode = patch.shortcode;
+    if (patch.stkCallbackUrl !== undefined) m.stkCallbackUrl = patch.stkCallbackUrl;
+    if (patch.b2cInitiator !== undefined) m.b2cInitiator = patch.b2cInitiator;
+    if (patch.b2cResultUrl !== undefined) m.b2cResultUrl = patch.b2cResultUrl;
+    if (patch.b2cTimeoutUrl !== undefined) m.b2cTimeoutUrl = patch.b2cTimeoutUrl;
+    if (patch.consumerKey) m.consumerKey = patch.consumerKey;
+    if (patch.consumerSecret) m.consumerSecret = patch.consumerSecret;
+    if (patch.passkey) m.passkey = patch.passkey;
+    if (patch.securityCredential) m.b2cSecurityCredential = patch.securityCredential;
+    m.updatedBy = actorId; m.updatedAtMs = Date.now();
+    this.mpesa = m;
+    const after = maskMpesaInternal(m);
+    this.record(actorId, actorRole, "mpesa.config", "mpesa_config", "1", { before, after });
+    return after;
   }
 
   async rtpMonitor(): Promise<RtpMonitor> {

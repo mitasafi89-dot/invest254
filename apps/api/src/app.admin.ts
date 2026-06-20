@@ -1,5 +1,5 @@
 import { Router, ApiError, requireAuth, requireRole, type Ctx } from "./http.js";
-import type { PageQuery, AdminUserListQuery, AdminWithdrawalListQuery, AdminDepositListQuery, ReportRange, GameConfigPatch, AdminPayoutListQuery } from "@printpesa/engine";
+import type { PageQuery, AdminUserListQuery, AdminWithdrawalListQuery, AdminDepositListQuery, ReportRange, GameConfigPatch, MpesaConfigPatch, AdminPayoutListQuery } from "@printpesa/engine";
 import type { ApiDeps } from "./app.js";
 
 /**
@@ -132,6 +132,37 @@ function parseGameConfigPatch(ctx: Ctx): GameConfigPatch {
   return patch as GameConfigPatch;
 }
 
+/** Plain (non-secret) and secret M-Pesa config fields the PATCH accepts. */
+const MPESA_PLAIN_FIELDS = ["shortcode", "stkCallbackUrl", "b2cInitiator", "b2cResultUrl", "b2cTimeoutUrl"] as const;
+const MPESA_SECRET_FIELDS = ["consumerKey", "consumerSecret", "passkey", "securityCredential"] as const;
+
+/** Validate + assemble an M-Pesa config patch. Strings are trimmed; empty secret strings are
+ *  dropped (write-only semantics: only a non-empty value rotates a secret). */
+function parseMpesaConfigPatch(ctx: Ctx): MpesaConfigPatch {
+  const body = ctx.body && typeof ctx.body === "object" ? (ctx.body as Record<string, unknown>) : {};
+  const patch: Record<string, string> = {};
+  if (body.environment !== undefined && body.environment !== null) {
+    const env = String(body.environment);
+    if (env !== "sandbox" && env !== "production") throw new ApiError("VALIDATION", "environment must be 'sandbox' or 'production'", 400);
+    patch.environment = env;
+  }
+  for (const key of MPESA_PLAIN_FIELDS) {
+    const raw = body[key];
+    if (raw === undefined || raw === null) continue;
+    if (typeof raw !== "string") throw new ApiError("VALIDATION", `${key} must be a string`, 400);
+    patch[key] = raw.trim();
+  }
+  for (const key of MPESA_SECRET_FIELDS) {
+    const raw = body[key];
+    if (raw === undefined || raw === null) continue;
+    if (typeof raw !== "string") throw new ApiError("VALIDATION", `${key} must be a string`, 400);
+    const v = raw.trim();
+    if (v !== "") patch[key] = v; // empty → keep existing secret
+  }
+  if (Object.keys(patch).length === 0) throw new ApiError("VALIDATION", "provide at least one M-Pesa field to update", 400);
+  return patch as MpesaConfigPatch;
+}
+
 /** Require a non-empty `id`/`tradeDate` `YYYY-MM-DD` body field (J5 seed rotation). */
 function bodyTradeDate(ctx: Ctx): string {
   const body = ctx.body && typeof ctx.body === "object" ? (ctx.body as Record<string, unknown>) : {};
@@ -243,6 +274,14 @@ export function registerAdminRoutes(router: Router, deps: ApiDeps): void {
   });
 
   router.get(`${BASE}/admin/rtp`, auth, admin, async () => deps.admin.rtpMonitor());
+
+  // ── M-Pesa configuration (admin reads masked; superadmin edits; secrets write-only) ──────────
+  router.get(`${BASE}/admin/mpesa-config`, auth, admin, async () => domain(() => deps.admin.getMpesaConfig()));
+
+  router.patch(`${BASE}/admin/mpesa-config`, auth, superadmin, async (ctx: Ctx) => {
+    const patch = parseMpesaConfigPatch(ctx);
+    return domain(() => deps.admin.updateMpesaConfig(ctx.claims!.userId, ctx.claims!.role ?? "player", patch));
+  });
 
   router.get(`${BASE}/admin/seeds`, auth, admin, async (ctx: Ctx) => ({ items: await deps.admin.listSeeds(listLimit(ctx, 30)) }));
 

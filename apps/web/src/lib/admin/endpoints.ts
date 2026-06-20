@@ -14,6 +14,8 @@ import type {
   DailyReportRow,
   GameConfigPatch,
   GameConfigRow,
+  MpesaConfigPatch,
+  MpesaConfigRow,
   RtpMonitor,
   AdminSeedRow,
   SeedRotateResult,
@@ -78,6 +80,9 @@ export const adminApi = {
   gameConfig: (t: string) => apiFetch<GameConfigRow>('/admin/game-config', { token: t }),
   updateGameConfig: (t: string, patch: GameConfigPatch) =>
     apiFetch<GameConfigRow>('/admin/game-config', { method: 'PATCH', token: t, body: patch }),
+  mpesaConfig: (t: string) => apiFetch<MpesaConfigRow>('/admin/mpesa-config', { token: t }),
+  updateMpesaConfig: (t: string, patch: MpesaConfigPatch) =>
+    apiFetch<MpesaConfigRow>('/admin/mpesa-config', { method: 'PATCH', token: t, body: patch }),
   seeds: (t: string, limit = 30) => apiFetch<{ items: AdminSeedRow[] }>('/admin/seeds', { token: t, query: { limit } }),
   rotateSeed: (t: string, tradeDate: string) =>
     apiFetch<SeedRotateResult>('/admin/seeds/rotate', { method: 'POST', token: t, body: { tradeDate } }),
