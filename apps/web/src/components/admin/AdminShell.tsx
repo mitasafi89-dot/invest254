@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { href: '/admin/withdrawals', label: 'Withdrawals', icon: <Icon d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" /> },
   { href: '/admin/users', label: 'Users', icon: <Icon d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM3 21a7 7 0 0118 0" /> },
   { href: '/admin/finance', label: 'Finance', icon: <Icon d="M3 6h18M3 12h18M3 18h18M7 3v18" /> },
+  { href: '/admin/affiliates', label: 'Affiliates', icon: <Icon d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4 0m8-4a3 3 0 10-3-3" /> },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
