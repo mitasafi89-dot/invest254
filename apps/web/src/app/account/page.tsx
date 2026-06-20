@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -42,6 +43,33 @@ export default function AccountPage() {
       <Card className="flex flex-col gap-3">
         <Row label="Username" value={`@${user.username}`} />
         <Row label="Role" value={user.role} />
+      </Card>
+
+      <Card className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-6 items-center rounded-full border border-down px-2 text-xs font-bold text-down">
+            18+
+          </span>
+          <h2 className="text-sm font-semibold tracking-tight">Responsible gaming</h2>
+        </div>
+        <p className="text-sm leading-relaxed text-muted">
+          PrintPesa is for entertainment and involves real money. Only stake what you can afford to
+          lose, and take a break whenever you need one.
+        </p>
+        <div className="flex flex-col gap-2">
+          <Link
+            href="/legal#responsible-gaming"
+            className="text-sm text-accent hover:underline"
+          >
+            Responsible gaming &amp; self-exclusion →
+          </Link>
+          <a href="tel:1190" className="text-sm text-accent hover:underline">
+            Gambling helpline 1190 →
+          </a>
+          <Link href="/legal#terms" className="text-sm text-muted hover:text-fg">
+            Terms, Privacy &amp; Licence
+          </Link>
+        </div>
       </Card>
     </section>
   );

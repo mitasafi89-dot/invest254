@@ -4,8 +4,15 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: 'PrintPesa',
+  title: { default: 'PrintPesa', template: '%s · PrintPesa' },
   description: 'Real-money trade-prediction game — predict BUY/SELL on the live BTC/KES curve.',
+  applicationName: 'PrintPesa',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'PrintPesa' },
+  icons: {
+    icon: [{ url: '/favicon.png', type: 'image/png' }],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
+  },
 };
 
 export const viewport: Viewport = {
