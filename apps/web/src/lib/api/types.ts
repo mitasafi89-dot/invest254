@@ -16,6 +16,8 @@ export interface MeDto {
   userId: string;
   role: AuthResult['role'];
   username: string;
+  /** Account M-Pesa number (MSISDN, e.g. 254712345678) — used to prefill deposit/withdraw. */
+  phone: string | null;
 }
 
 export interface WalletDto {

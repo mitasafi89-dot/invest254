@@ -99,6 +99,7 @@ export function registerAuthRoutes(router: Router, deps: ApiDeps): void {
       userId,
       role: profile?.role ?? ctx.claims!.role ?? "player",
       username,
+      phone: profile?.phone ?? null,
     };
   });
 }

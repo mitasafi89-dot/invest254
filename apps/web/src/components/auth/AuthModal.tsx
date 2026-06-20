@@ -212,6 +212,8 @@ export function AuthModal() {
           type="tel"
           inputMode="tel"
           autoComplete="tel"
+          required
+          autoFocus
           placeholder="0712 345 678"
           leading={<PhoneIcon />}
           value={phone}
@@ -224,6 +226,7 @@ export function AuthModal() {
             label="Username"
             name="username"
             autoComplete="username"
+            required
             placeholder="Shown in chat & the live feed"
             leading={<UserIcon />}
             value={username}
@@ -237,6 +240,7 @@ export function AuthModal() {
           name="password"
           type={showPw ? 'text' : 'password'}
           autoComplete={isRegister ? 'new-password' : 'current-password'}
+          required
           placeholder={isRegister ? 'Min 8 chars, 1 letter + 1 number' : '••••••••'}
           leading={<LockIcon />}
           trailing={
@@ -258,7 +262,8 @@ export function AuthModal() {
           <Input
             label="Referral code"
             name="referral"
-            placeholder="Optional · 8-character code"
+            optional
+            placeholder="8-character code"
             leading={<TagIcon />}
             value={referral}
             onChange={(e) => setReferral(e.target.value.toUpperCase())}

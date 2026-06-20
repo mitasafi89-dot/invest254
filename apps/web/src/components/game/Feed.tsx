@@ -123,24 +123,30 @@ export function Feed() {
         </p>
       ) : null}
 
-      <form onSubmit={submit} className="flex items-center gap-2 border-t border-border p-2">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value.slice(0, MAX_LEN))}
-          placeholder={token ? (cooldown > 0 ? `Wait ${cooldown}s…` : 'Say something…') : 'Log in to chat'}
-          aria-label="Chat message"
-          className="h-9 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm text-fg outline-none placeholder:text-muted focus:border-accent/60"
-        />
-        <button
-          type="submit"
-          disabled={cooldown > 0 || !text.trim()}
-          className={cn(
-            'h-9 shrink-0 rounded-lg px-4 text-sm font-semibold text-accent-fg transition',
-            cooldown > 0 || !text.trim() ? 'bg-accent/50' : 'bg-accent hover:opacity-90',
-          )}
-        >
-          Send
-        </button>
+      <form onSubmit={submit} className="flex flex-col gap-1 border-t border-border p-2">
+        <div className="flex items-center gap-2">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value.slice(0, MAX_LEN))}
+            maxLength={MAX_LEN}
+            placeholder={token ? (cooldown > 0 ? `Wait ${cooldown}s…` : 'Say something…') : 'Log in to chat'}
+            aria-label="Chat message"
+            className="h-9 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm text-fg outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/40"
+          />
+          <button
+            type="submit"
+            disabled={cooldown > 0 || !text.trim()}
+            className={cn(
+              'h-9 shrink-0 rounded-lg px-4 text-sm font-semibold text-accent-fg transition',
+              cooldown > 0 || !text.trim() ? 'bg-accent/50' : 'bg-accent hover:opacity-90',
+            )}
+          >
+            Send
+          </button>
+        </div>
+        {text.length > MAX_LEN - 40 ? (
+          <span className="px-1 text-right text-[11px] text-muted">{MAX_LEN - text.length} characters left</span>
+        ) : null}
       </form>
     </div>
   );

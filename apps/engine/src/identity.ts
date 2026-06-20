@@ -19,7 +19,7 @@ export interface CredentialRecord { userId: string; role: string; status: string
 
 /** Profile state for the `/me` view. */
 export interface ProfileRow {
-  userId: string; username: string; role: string; status: string;
+  userId: string; username: string; phone: string; role: string; status: string;
 }
 
 /** An affiliate (marketer) enrollment: the stable referral code + commission terms + current role. */
@@ -265,13 +265,13 @@ export class PgIdentityRepository implements IdentityRepository, AffiliateReposi
   }
   async getProfile(userId: string): Promise<ProfileRow | null> {
     const r = await this.q.query(
-      "select id, username, role, status from profiles where id = $1", [userId]);
+      "select id, username, phone, role, status from profiles where id = $1", [userId]);
     if (!r.rows.length) return null;
     return this.rowToProfile(r.rows[0]);
   }
   private rowToProfile(x: Record<string, unknown>): ProfileRow {
     return {
-      userId: String(x.id), username: String(x.username), role: String(x.role), status: String(x.status),
+      userId: String(x.id), username: String(x.username), phone: String(x.phone), role: String(x.role), status: String(x.status),
     };
   }
 }
@@ -459,7 +459,7 @@ export class InMemoryIdentityRepository implements IdentityRepository, Affiliate
   }
   private toProfile(u: MemUser): ProfileRow {
     return {
-      userId: u.userId, username: u.username, role: u.role, status: u.status,
+      userId: u.userId, username: u.username, phone: u.phone, role: u.role, status: u.status,
     };
   }
   /** Test seam: flip an account's status (active | suspended | banned). */

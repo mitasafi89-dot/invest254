@@ -19,7 +19,7 @@ administrative back office.
 | 03 | [Realtime Protocol](docs/03-realtime-protocol.md) | WebSocket events, tick stream, position lifecycle |
 | 04 | [Database Schema](docs/04-database-schema.md) | All tables, columns, relationships, RLS |
 | 05 | [API Reference](docs/05-api-reference.md) | REST endpoints for every feature |
-| 06 | [Authentication & KYC](docs/06-auth-kyc.md) | Phone + OTP, sessions, age-gate, KYC |
+| 06 | [Authentication & KYC](docs/06-auth-kyc.md) | Phone + password, sessions, age-gate, KYC |
 | 07 | [Wallet & Transactions](docs/07-wallet-transactions.md) | Balances, ledger, atomic settlement |
 | 08 | [M-Pesa Payments](docs/08-payments-mpesa.md) | STK push deposits, B2C withdrawals, Daraja |
 | 09 | [Affiliate / Marketer System](docs/09-affiliate-system.md) | Referrals, 20% rev-share, payouts |
@@ -44,7 +44,7 @@ administrative back office.
 | Default round / trade duration | 10s | Auto-sell timer |
 | Chart timeframes | 30s · 1m · 2m · 5m | Visualization only |
 | Affiliate commission | 20% | Revenue-share on referred net losses |
-| Auth | Phone + OTP | Email optional |
+| Auth | Phone + password | Self-managed (no OTP) |
 | KYC (MVP) | None | Age verification & basic KYC removed (see migration 0018) |
 
 ---

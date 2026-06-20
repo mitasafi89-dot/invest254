@@ -56,7 +56,7 @@ export interface AuthSession { token: string; userId: string; role: string; }
 
 /** Profile view returned by `/me`. */
 export interface Profile {
-  userId: string; username: string; role: string; status: string;
+  userId: string; username: string; phone: string; role: string; status: string;
 }
 
 export interface AuthServiceOptions {
