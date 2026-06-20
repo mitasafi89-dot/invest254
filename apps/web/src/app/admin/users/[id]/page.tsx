@@ -14,7 +14,7 @@ import { useSession } from '@/lib/auth/session';
 import { PageHeader, StatCard, Section, Empty, ConfirmButton } from '@/components/admin/ui';
 import { useUser, useSetUserStatus, useAdjustBalance, useSetCommissionRate, useSetUserRole } from '@/lib/admin/hooks';
 
-const ROLES = ['player', 'marketer', 'admin', 'superadmin'] as const;
+const ROLES = ['player', 'marketer', 'admin'] as const;
 
 export default function UserDetailPage({ params }: { params: { id: string } }) {
   const id = params.id;
@@ -57,10 +57,24 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
             </Card>
           </Section>
 
-          <StatusActions id={id} status={q.data.status} />
-          <RoleManage id={id} current={q.data.role} />
-          <BalanceAdjust id={id} />
-          {q.data.role === 'marketer' ? <CommissionRate id={id} /> : null}
+          {q.data.role === 'superadmin' ? (
+            <Section title="System owner">
+              <Card className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-fg">Protected account</span>
+                <span className="text-sm text-muted">
+                  This is the system owner (superadmin). Their role and status are locked and their wallet can&apos;t be adjusted — no
+                  account can demote, suspend, ban, or modify the owner.
+                </span>
+              </Card>
+            </Section>
+          ) : (
+            <>
+              <StatusActions id={id} status={q.data.status} />
+              <RoleManage id={id} current={q.data.role} />
+              <BalanceAdjust id={id} />
+              {q.data.role === 'marketer' ? <CommissionRate id={id} /> : null}
+            </>
+          )}
         </>
       )}
     </>

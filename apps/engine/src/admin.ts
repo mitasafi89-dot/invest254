@@ -288,7 +288,7 @@ const inRange = (d: string, r: ReportRange): boolean => (r.from == null || d >= 
 /** Re-raise the bare admin error code the RPCs raise instead of the wrapped pg message. */
 function mapAdminError(e: unknown): never {
   const msg = (e as { message?: string })?.message ?? String(e);
-  const m = msg.match(/(NOT_AUTHORIZED|INVALID_STATUS|NO_SELF_ACTION|USER_NOT_FOUND|INSUFFICIENT_PRIVILEGE|INVALID_RATE|NOT_AFFILIATE|REASON_REQUIRED|INVALID_AMOUNT|INVALID_ROLE|INSUFFICIENT_FUNDS|WALLET_NOT_FOUND|INVALID_CONFIG|INVALID_DATE|PAST_DATE|SEED_REVEALED|NOT_FOUND)/);
+  const m = msg.match(/(NOT_AUTHORIZED|INVALID_STATUS|NO_SELF_ACTION|USER_NOT_FOUND|INSUFFICIENT_PRIVILEGE|INVALID_RATE|NOT_AFFILIATE|REASON_REQUIRED|INVALID_AMOUNT|INVALID_ROLE|INSUFFICIENT_FUNDS|WALLET_NOT_FOUND|INVALID_CONFIG|INVALID_DATE|PAST_DATE|SEED_REVEALED|SUPERADMIN_PROTECTED|NOT_FOUND)/);
   throw new Error(m ? m[1] : msg);
 }
 
@@ -778,6 +778,7 @@ export class InMemoryAdminRepository implements AdminRepository {
     if (actorId === targetId) throw new Error("NO_SELF_ACTION");
     const u = this.identity.adminUser(targetId);
     if (!u) throw new Error("USER_NOT_FOUND");
+    if (u.role === "superadmin") throw new Error("SUPERADMIN_PROTECTED");
     if (ADMIN_ROLES.includes(u.role) && actorRole !== "superadmin") throw new Error("INSUFFICIENT_PRIVILEGE");
     const from = u.status;
     this.identity.adminSetStatus(targetId, status);
@@ -788,9 +789,11 @@ export class InMemoryAdminRepository implements AdminRepository {
   async setUserRole(actorId: string, actorRole: string, targetId: string, role: string): Promise<SetUserRoleResult> {
     if (actorRole !== "superadmin") throw new Error("NOT_AUTHORIZED");
     if (!VALID_ROLES.includes(role)) throw new Error("INVALID_ROLE");
+    if (role === "superadmin") throw new Error("SUPERADMIN_PROTECTED");
     if (actorId === targetId) throw new Error("NO_SELF_ACTION");
     const u = this.identity.adminUser(targetId);
     if (!u) throw new Error("USER_NOT_FOUND");
+    if (u.role === "superadmin") throw new Error("SUPERADMIN_PROTECTED");
     const from = u.role;
     this.identity.adminSetRole(targetId, role);
     this.record(actorId, actorRole, "user.role", "user", targetId, { from, to: role });
@@ -828,7 +831,9 @@ export class InMemoryAdminRepository implements AdminRepository {
     if (!ADMIN_ROLES.includes(actorRole)) throw new Error("NOT_AUTHORIZED");
     if (!Number.isInteger(amountCents) || amountCents === 0) throw new Error("INVALID_AMOUNT");
     if (!reason || reason.trim() === "") throw new Error("REASON_REQUIRED");
-    if (!this.identity.adminUser(targetId)) throw new Error("USER_NOT_FOUND");
+    const tgt = this.identity.adminUser(targetId);
+    if (!tgt) throw new Error("USER_NOT_FOUND");
+    if (tgt.role === "superadmin") throw new Error("SUPERADMIN_PROTECTED");
     const before = await this.payments.getBalance(targetId);
     if (before + amountCents < 0) throw new Error("INSUFFICIENT_FUNDS");
     const after = this.payments.adminApplyAdjustment(targetId, amountCents);

@@ -253,6 +253,24 @@ test("user role: only superadmin promotes/demotes; validates; no self-action; au
   } finally { await api.close(); }
 });
 
+test("superadmin is a protected singleton owner: cannot be created, demoted, banned, or debited", async () => {
+  const api = await startTestApi();
+  try {
+    const owner = await register(api, "0712000077", "owner_acct");
+    api.identity.adminSetRole(owner, "superadmin"); // this account is now the owner
+
+    // (a) no one can mint a second superadmin
+    const other = await register(api, "0712000078", "wannabe");
+    assert.equal((await req(api, "POST", `/api/v1/admin/users/${other}/role`, { token: "root-1:superadmin", body: { role: "superadmin" } })).status, 403);
+    // (b) the owner cannot be demoted
+    assert.equal((await req(api, "POST", `/api/v1/admin/users/${owner}/role`, { token: "root-1:superadmin", body: { role: "admin" } })).status, 403);
+    // (c) the owner cannot be suspended/banned
+    assert.equal((await req(api, "POST", `/api/v1/admin/users/${owner}/ban`, { token: "root-1:superadmin" })).status, 403);
+    // (d) the owner's wallet cannot be adjusted
+    assert.equal((await req(api, "POST", `/api/v1/admin/wallets/${owner}/adjust`, { token: "root-1:superadmin", body: { amountCents: 1000, reason: "x" } })).status, 403);
+  } finally { await api.close(); }
+});
+
 test("J5 RTP monitor: target derived from house_edge, rolling windows, no alert on empty data", async () => {
   const api = await startTestApi();
   try {
