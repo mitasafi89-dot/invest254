@@ -9,7 +9,7 @@
     "./server": "./src/server.ts"
   },
   "scripts": {
-    "start": "tsx src/server.ts"
+    "start": "node --env-file-if-exists=../../.env --import tsx src/server.ts"
   },
   "dependencies": {
     "@invest254/shared": "0.1.0",
