@@ -81,7 +81,7 @@ export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> 
   const identity = new InMemoryIdentityRepository();
   const auth = new AuthService(identity, { jwtSecret: "test-secret-which-is-long-enough-123456", jwtTtlSeconds: 3600 });
   const affiliate = new AffiliateService(identity, daraja);
-  const admin = new AdminService(new InMemoryAdminRepository(identity, payRepo, engage));
+  const admin = new AdminService(new InMemoryAdminRepository(identity, payRepo, engage, gameRepo));
 
   const deps: ApiDeps = {
     verifier: stubVerifier(),

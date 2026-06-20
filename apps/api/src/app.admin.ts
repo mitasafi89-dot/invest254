@@ -1,5 +1,5 @@
 import { Router, ApiError, requireAuth, requireRole, type Ctx } from "./http.js";
-import type { PageQuery, AdminUserListQuery, AdminWithdrawalListQuery, AdminDepositListQuery, ReportRange, GameConfigPatch, MpesaConfigPatch, AdminPayoutListQuery } from "@printpesa/engine";
+import type { PageQuery, AdminUserListQuery, AdminWithdrawalListQuery, AdminDepositListQuery, ReportRange, GameConfigPatch, MpesaConfigPatch, AdminPayoutListQuery, AdminUserActivityQuery } from "@printpesa/engine";
 import type { ApiDeps } from "./app.js";
 
 /**
@@ -199,6 +199,17 @@ export function registerAdminRoutes(router: Router, deps: ApiDeps): void {
 
   router.get(`${BASE}/admin/users/:id`, auth, admin, async (ctx: Ctx) =>
     domain(() => deps.admin.getUserDetail(ctx.params.id!)));
+
+  // Per-user activity timeline (J7) — deposits + withdrawals + bets, newest-first, keyset-paginated.
+  router.get(`${BASE}/admin/users/:id/activity`, auth, admin, async (ctx: Ctx) => {
+    const kindRaw = ctx.query.get("kind");
+    if (kindRaw !== null && kindRaw !== "deposit" && kindRaw !== "withdrawal" && kindRaw !== "bet") {
+      throw new ApiError("INVALID_KIND", "kind must be 'deposit', 'withdrawal', or 'bet'", 400);
+    }
+    const q: AdminUserActivityQuery = { ...pageQuery(ctx), kind: kindRaw ?? undefined };
+    const page = await deps.admin.listUserActivity(ctx.params.id!, q);
+    return { items: page.items, nextCursor: page.nextCursor };
+  });
 
   for (const action of Object.keys(STATUS_ACTION)) {
     router.post(`${BASE}/admin/users/:id/${action}`, auth, admin, async (ctx: Ctx) => {

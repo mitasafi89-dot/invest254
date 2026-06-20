@@ -7,6 +7,7 @@ import type {
   GameConfigRow, GameConfigPatch, RtpMonitor, AdminSeedRow, SeedRotateResult,
   MpesaConfigRow, MpesaConfigPatch, SetUserRoleResult,
   AdminPayoutRow, AdminPayoutListQuery, AdminChatModRow,
+  AdminUserActivityRow, AdminUserActivityQuery,
 } from "./admin.js";
 
 /**
@@ -26,6 +27,13 @@ export class AdminService {
     const d = await this.repo.getUserDetail(userId);
     if (!d) throw new Error("USER_NOT_FOUND");
     return d;
+  }
+
+  /** A single user's unified activity timeline (deposits + withdrawals + bets), newest-first,
+   *  keyset-paginated. Like the other admin lists it does not 404 — an unknown user simply
+   *  yields an empty page (the user-detail read already guards existence). */
+  listUserActivity(userId: string, q: AdminUserActivityQuery): Promise<Page<AdminUserActivityRow>> {
+    return this.repo.listUserActivity(userId, q);
   }
 
   setUserStatus(actorId: string, actorRole: string, targetId: string, status: string, reason: string | null): Promise<SetUserStatusResult> {

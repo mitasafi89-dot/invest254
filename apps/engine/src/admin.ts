@@ -118,11 +118,47 @@ export interface AdminPayoutListQuery extends PageQuery { status?: string | unde
 /** A chat message in the moderation view (J6) — includes hidden rows with their visibility. */
 export interface AdminChatModRow { id: number; userId: string | null; username: string; message: string; isHidden: boolean; createdAtMs: number; }
 
+// ── J7: per-user activity timeline (deposits + withdrawals + bets merged) ───────────────────
+/** One event in a user's unified activity timeline. `kind` discriminates the shape: cash events
+ *  ("deposit"/"withdrawal") carry phone/mpesaReceipt; "bet" events carry the position fields
+ *  (direction/payout/pnl/multiplier/result/settledAt/gameDayId). `amountCents` is the
+ *  deposit/withdrawal amount or the bet stake; `createdAtMs` is the transaction time or the
+ *  position's opened-at — the single sort/keyset key across both sources. */
+export interface AdminUserActivityRow {
+  kind: "deposit" | "withdrawal" | "bet";
+  id: string;
+  createdAtMs: number;
+  status: string;
+  amountCents: Cents;
+  direction: string | null;
+  payoutCents: Cents | null;
+  pnlCents: Cents | null;
+  multiplier: number | null;
+  result: string | null;
+  settledAtMs: number | null;
+  gameDayId: number | null;
+  phone: string | null;
+  mpesaReceipt: string | null;
+}
+/** Activity-timeline query: optional `kind` filter ("deposit"|"withdrawal"|"bet"), keyset-paginated. */
+export interface AdminUserActivityQuery extends PageQuery { kind?: string | undefined; }
+/** A position projected for the admin activity timeline (the in-memory bet source). */
+export interface AdminBetSnapshot {
+  id: string; status: string; direction: string; stakeCents: Cents;
+  payoutCents: Cents | null; pnlCents: Cents | null; multiplier: number | null;
+  result: string | null; openedAtMs: number; settledAtMs: number | null; gameDayId: number | null;
+}
+/** Per-user bet source the in-memory admin repo merges into the activity timeline (Postgres reads
+ *  the positions table directly). */
+export interface AdminBetSource { adminBetsOf(userId: string): AdminBetSnapshot[]; }
+
 /** Durable boundary for the admin back office (RPCs + reads / in-memory mirror). */
 export interface AdminRepository {
   overview(): Promise<AdminOverview>;
   listUsers(q: AdminUserListQuery): Promise<Page<AdminUserRow>>;
   getUserDetail(userId: string): Promise<AdminUserDetail | null>;
+  /** A single user's unified activity timeline (deposits + withdrawals + bets), newest-first, keyset-paginated. */
+  listUserActivity(userId: string, q: AdminUserActivityQuery): Promise<Page<AdminUserActivityRow>>;
   setUserStatus(actorId: string, actorRole: string, targetId: string, status: string, reason: string | null): Promise<SetUserStatusResult>;
   setCommissionRate(actorId: string, actorRole: string, targetId: string, rate: number): Promise<SetCommissionRateResult>;
   setUserRole(actorId: string, actorRole: string, targetId: string, role: string): Promise<SetUserRoleResult>;
@@ -364,6 +400,38 @@ export class PgAdminRepository implements AdminRepository {
       referredBy: x.referred_by == null ? null : String(x.referred_by),
       realBalanceCents: num(x.real_balance), bonusBalanceCents: num(x.bonus_balance), turnoverCents: num(x.turnover), ggrCents: num(x.ggr),
     };
+  }
+
+  async listUserActivity(userId: string, q: AdminUserActivityQuery): Promise<Page<AdminUserActivityRow>> {
+    const limit = clampLimit(q.limit);
+    const cur = decodeKeyset(q.cursor);
+    const kind = q.kind ?? null;
+    const r = await this.q.query(
+      `select * from (
+         select t.id::text as id, t.kind as kind, t.created_at as created_at, t.status as status,
+                t.amount::bigint as amount_cents,
+                null::text as direction, null::bigint as payout_cents, null::bigint as pnl_cents,
+                null::double precision as multiplier, null::text as result,
+                null::timestamptz as settled_at, null::bigint as game_day_id,
+                t.phone as phone, t.mpesa_receipt as mpesa_receipt
+           from transactions t
+          where t.user_id = $1 and ($2::text is null or t.kind = $2)
+         union all
+         select p.id::text as id, 'bet' as kind, p.opened_at as created_at, p.status as status,
+                p.stake::bigint as amount_cents,
+                p.direction as direction, p.payout::bigint as payout_cents, p.pnl::bigint as pnl_cents,
+                p.multiplier::double precision as multiplier, p.result as result,
+                p.settled_at as settled_at, p.game_day_id::bigint as game_day_id,
+                null::text as phone, null::text as mpesa_receipt
+           from positions p
+          where p.user_id = $1 and ($2::text is null or $2 = 'bet')
+       ) a
+       where ($3::timestamptz is null or (a.created_at, a.id) < ($3::timestamptz, $4::text))
+       order by a.created_at desc, a.id desc
+       limit $5`,
+      [userId, kind, cur ? new Date(cur.tsMs).toISOString() : null, cur ? cur.id : null, limit + 1]);
+    const rows: AdminUserActivityRow[] = r.rows.map(mapActivityRow);
+    return pageFrom(rows, limit, (a) => `${a.createdAtMs}:${a.id}`);
   }
 
   async setUserStatus(actorId: string, actorRole: string, targetId: string, status: string, reason: string | null): Promise<SetUserStatusResult> {
@@ -669,6 +737,23 @@ export class PgAdminRepository implements AdminRepository {
 }
 
 /** Map a raw deposit `transactions` row into the public AdminDepositRow. */
+function mapActivityRow(x: any): AdminUserActivityRow {
+  return {
+    kind: String(x.kind) as AdminUserActivityRow["kind"],
+    id: String(x.id), createdAtMs: ms(x.created_at), status: String(x.status),
+    amountCents: num(x.amount_cents),
+    direction: x.direction == null ? null : String(x.direction),
+    payoutCents: x.payout_cents == null ? null : num(x.payout_cents),
+    pnlCents: x.pnl_cents == null ? null : num(x.pnl_cents),
+    multiplier: x.multiplier == null ? null : Number(x.multiplier),
+    result: x.result == null ? null : String(x.result),
+    settledAtMs: x.settled_at == null ? null : ms(x.settled_at),
+    gameDayId: x.game_day_id == null ? null : num(x.game_day_id),
+    phone: x.phone == null ? null : String(x.phone),
+    mpesaReceipt: x.mpesa_receipt == null ? null : String(x.mpesa_receipt),
+  };
+}
+
 function mapDepositRow(x: any): AdminDepositRow {
   return {
     txId: String(x.id), userId: String(x.user_id), amountCents: num(x.amount), status: String(x.status), phone: String(x.phone),
@@ -711,6 +796,7 @@ export class InMemoryAdminRepository implements AdminRepository {
     private readonly identity: InMemoryIdentityRepository,
     private readonly payments: InMemoryPaymentRepository,
     private readonly engagement: InMemoryEngagementRepository = new InMemoryEngagementRepository(),
+    private readonly bets?: AdminBetSource,
   ) {}
 
   async overview(): Promise<AdminOverview> {
@@ -770,6 +856,33 @@ export class InMemoryAdminRepository implements AdminRepository {
       turnoverCents: own.reduce((s, p) => s + p.stakeCents, 0),
       ggrCents: own.reduce((s, p) => s + (p.stakeCents - p.payoutCents), 0),
     };
+  }
+
+  async listUserActivity(userId: string, q: AdminUserActivityQuery): Promise<Page<AdminUserActivityRow>> {
+    const kind = q.kind;
+    const rows: Array<AdminUserActivityRow & { _ts: number; _id: string }> = [];
+    if (kind === undefined || kind === "deposit" || kind === "withdrawal") {
+      for (const t of this.payments.adminTransactions()) {
+        if (t.userId !== userId || (kind !== undefined && t.kind !== kind)) continue;
+        rows.push({
+          kind: t.kind, id: t.txId, createdAtMs: t.createdAtMs, status: t.status, amountCents: t.amountCents,
+          direction: null, payoutCents: null, pnlCents: null, multiplier: null, result: null,
+          settledAtMs: null, gameDayId: null, phone: t.phone, mpesaReceipt: t.mpesaReceipt,
+          _ts: t.createdAtMs, _id: t.txId,
+        });
+      }
+    }
+    if ((kind === undefined || kind === "bet") && this.bets) {
+      for (const b of this.bets.adminBetsOf(userId)) {
+        rows.push({
+          kind: "bet", id: b.id, createdAtMs: b.openedAtMs, status: b.status, amountCents: b.stakeCents,
+          direction: b.direction, payoutCents: b.payoutCents, pnlCents: b.pnlCents, multiplier: b.multiplier,
+          result: b.result, settledAtMs: b.settledAtMs, gameDayId: b.gameDayId, phone: null, mpesaReceipt: null,
+          _ts: b.openedAtMs, _id: b.id,
+        });
+      }
+    }
+    return memKeyset(rows, q);
   }
 
   async setUserStatus(actorId: string, actorRole: string, targetId: string, status: string, reason: string | null): Promise<SetUserStatusResult> {

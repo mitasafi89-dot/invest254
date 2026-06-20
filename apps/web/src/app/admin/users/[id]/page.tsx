@@ -1,18 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Money } from '@/components/ui/Money';
 import { StatusBadge } from '@/components/ui/Badge';
+import { cn } from '@/lib/cn';
 import { ApiError } from '@/lib/api/client';
 import { useToast } from '@/lib/toast/ToastProvider';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatRelativeTime } from '@/lib/format';
 import { useSession } from '@/lib/auth/session';
-import { PageHeader, StatCard, Section, Empty, ConfirmButton } from '@/components/admin/ui';
-import { useUser, useSetUserStatus, useAdjustBalance, useSetCommissionRate, useSetUserRole } from '@/lib/admin/hooks';
+import { PageHeader, StatCard, Section, Empty, ConfirmButton, TableWrap, Th, Td, Toolbar, FilterSelect } from '@/components/admin/ui';
+import { useUser, useUserActivity, useSetUserStatus, useAdjustBalance, useSetCommissionRate, useSetUserRole } from '@/lib/admin/hooks';
+import type { AdminUserActivityRow } from '@/lib/admin/types';
 
 const ROLES = ['player', 'marketer', 'admin'] as const;
 
@@ -57,6 +59,8 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
             </Card>
           </Section>
 
+          <ActivityTimeline id={id} />
+
           {q.data.role === 'superadmin' ? (
             <Section title="System owner">
               <Card className="flex flex-col gap-1">
@@ -78,6 +82,103 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
         </>
       )}
     </>
+  );
+}
+
+const ACTIVITY_KINDS = [
+  { value: '', label: 'All activity' },
+  { value: 'deposit', label: 'Deposits' },
+  { value: 'withdrawal', label: 'Withdrawals' },
+  { value: 'bet', label: 'Bets' },
+];
+const KIND_LABEL: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', bet: 'Bet' };
+
+function ActivityTimeline({ id }: { id: string }) {
+  const [kind, setKind] = useState('');
+  const q = useUserActivity(id, kind || undefined);
+  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data]);
+
+  return (
+    <Section title="Activity">
+      <Toolbar>
+        <FilterSelect label="Show" value={kind} onChange={setKind} options={ACTIVITY_KINDS} />
+      </Toolbar>
+      {q.isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : q.isError ? (
+        <Empty title="Couldn't load activity" description="Try again shortly." />
+      ) : rows.length === 0 ? (
+        <Empty title="No activity yet" description="Deposits, withdrawals and bets will appear here." />
+      ) : (
+        <>
+          <TableWrap>
+            <thead>
+              <tr className="border-b border-border">
+                <Th>Type</Th>
+                <Th>Detail</Th>
+                <Th className="text-right">Amount</Th>
+                <Th>Status</Th>
+                <Th className="text-right">When</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <ActivityRow key={`${r.kind}:${r.id}`} r={r} />
+              ))}
+            </tbody>
+          </TableWrap>
+          {q.hasNextPage ? (
+            <Button variant="outline" size="sm" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage}>
+              {q.isFetchingNextPage ? 'Loading…' : 'Load more'}
+            </Button>
+          ) : null}
+        </>
+      )}
+    </Section>
+  );
+}
+
+function ActivityRow({ r }: { r: AdminUserActivityRow }) {
+  const isBet = r.kind === 'bet';
+  const detail = isBet
+    ? [r.direction?.toUpperCase(), r.multiplier != null ? `×${r.multiplier.toFixed(2)}` : null, r.result]
+        .filter(Boolean)
+        .join(' · ')
+    : [r.phone, r.mpesaReceipt].filter(Boolean).join(' · ');
+
+  return (
+    <tr className="border-b border-border last:border-0">
+      <Td>
+        <span
+          className={cn(
+            'inline-flex rounded-md px-2 py-0.5 text-xs font-medium',
+            r.kind === 'deposit'
+              ? 'bg-up/10 text-up'
+              : r.kind === 'withdrawal'
+                ? 'bg-down/10 text-down'
+                : 'bg-surface-2 text-fg',
+          )}
+        >
+          {KIND_LABEL[r.kind]}
+        </span>
+      </Td>
+      <Td className="text-xs text-muted">{detail || '—'}</Td>
+      <Td className="text-right font-medium tabular-nums">
+        <Money cents={r.amountCents} />
+        {isBet && r.pnlCents != null ? (
+          <span className={cn('ml-2 text-xs', r.pnlCents >= 0 ? 'text-up' : 'text-down')}>
+            {r.pnlCents >= 0 ? '+' : ''}
+            <Money cents={r.pnlCents} />
+          </span>
+        ) : null}
+      </Td>
+      <Td>
+        <StatusBadge status={r.status} />
+      </Td>
+      <Td className="whitespace-nowrap text-right text-xs text-muted">
+        <span title={formatDateTime(r.createdAtMs)}>{formatRelativeTime(r.createdAtMs)} ago</span>
+      </Td>
+    </tr>
   );
 }
 

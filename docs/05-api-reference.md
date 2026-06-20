@@ -79,6 +79,7 @@ All money fields are **cents (KES)**. Standard error: `{ "error": { "code", "mes
 |--------|------|----------|------|
 | GET | `/admin/users?q&status&role` | support | search/list users |
 | GET | `/admin/users/:id` | support | full profile, wallet, history |
+| GET | `/admin/users/:id/activity` | support | merged deposit/withdrawal/bet timeline (`?kind=`, keyset-paginated) |
 | PATCH | `/admin/users/:id` | super_admin | edit role/status |
 | POST | `/admin/users/:id/suspend` `/ban` | support | moderation |
 | POST | `/admin/wallets/:id/adjust` | finance_admin | `{ amount, reason }` manual credit/debit (audited) |

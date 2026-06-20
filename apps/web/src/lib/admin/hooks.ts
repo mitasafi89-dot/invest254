@@ -40,6 +40,16 @@ export function useUser(id: string | null) {
   const t = useTok();
   return useQuery({ queryKey: ['admin', 'user', id], queryFn: () => adminApi.user(t, id as string), enabled: !!t && !!id });
 }
+export function useUserActivity(id: string | null, kind?: string) {
+  const t = useTok();
+  return useInfiniteQuery({
+    queryKey: ['admin', 'user-activity', id, kind ?? 'all'],
+    enabled: !!t && !!id,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => adminApi.userActivity(t, id as string, { cursor: pageParam, kind }),
+    getNextPageParam: (l: Paginated<unknown>) => l.nextCursor ?? undefined,
+  });
+}
 export function useSetUserStatus() {
   const t = useTok();
   const qc = useQueryClient();

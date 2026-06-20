@@ -72,6 +72,25 @@ export interface AdjustBalanceResult {
   direction: 'credit' | 'debit';
 }
 
+export type AdminActivityKind = 'deposit' | 'withdrawal' | 'bet';
+/** One event in a user's unified activity timeline (mirrors engine AdminUserActivityRow). */
+export interface AdminUserActivityRow {
+  kind: AdminActivityKind;
+  id: string;
+  createdAtMs: number;
+  status: string;
+  amountCents: Cents;
+  direction: string | null;
+  payoutCents: Cents | null;
+  pnlCents: Cents | null;
+  multiplier: number | null;
+  result: string | null;
+  settledAtMs: number | null;
+  gameDayId: number | null;
+  phone: string | null;
+  mpesaReceipt: string | null;
+}
+
 export interface AdminWithdrawalRow {
   txId: string;
   userId: string;

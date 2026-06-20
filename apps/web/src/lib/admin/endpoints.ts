@@ -8,6 +8,7 @@ import type {
   AdminDepositsReconcile,
   AdminOverview,
   AdminPayoutRow,
+  AdminUserActivityRow,
   AdminUserDetail,
   AdminUserRow,
   AdminWithdrawalRow,
@@ -41,6 +42,11 @@ export const adminApi = {
       query: { cursor: p.cursor ?? undefined, limit: p.limit, role: p.role, status: p.status, q: p.q },
     }),
   user: (t: string, id: string) => apiFetch<AdminUserDetail>(`/admin/users/${id}`, { token: t }),
+  userActivity: (t: string, id: string, p: Page & { kind?: string | undefined } = {}) =>
+    apiFetch<Paginated<AdminUserActivityRow>>(`/admin/users/${id}/activity`, {
+      token: t,
+      query: { cursor: p.cursor ?? undefined, limit: p.limit, kind: p.kind },
+    }),
   setUserStatus: (t: string, id: string, action: 'suspend' | 'ban' | 'reactivate', reason?: string) =>
     apiFetch<SetUserStatusResult>(`/admin/users/${id}/${action}`, { method: 'POST', token: t, body: { reason } }),
   setUserRole: (t: string, id: string, role: string) =>

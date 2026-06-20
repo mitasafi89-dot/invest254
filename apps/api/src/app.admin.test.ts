@@ -365,3 +365,59 @@ test("J6 chat moderation: list, hide (excluded), includeHidden, unhide, 404 + au
     assert.ok(audit.items.some((a: any) => a.action === "chat.unhide"));
   } finally { await api.close(); }
 });
+
+test("admin user activity: merges deposits, withdrawals and bets newest-first with kind filter + paging", async () => {
+  const api = await startTestApi();
+  try {
+    const uid = await register(api, "0712009001", "timeline");
+
+    // Seed cash transactions (deposit + withdrawal) and two bets for this user.
+    api.payRepo.seed(uid, 1_000_000);
+    await api.payRepo.createDeposit(uid, 50_000, "254712009001");
+    await api.payRepo.createWithdrawal(uid, 20_000, "254712009001", 5_000);
+    api.gameRepo.seed(uid, 1_000_000);
+    const t0 = Date.now();
+    const bet1 = await api.gameRepo.openPosition({ userId: uid, stakeCents: 10_000, direction: "buy", entryRate: 100, durationS: 10, gameDayId: 2, nonce: 1, openedAtMs: t0 });
+    await api.gameRepo.settlePosition({ positionId: bet1.positionId, exitRate: 130, result: "win", multiplier: 3, payoutCents: 30_000 });
+    await api.gameRepo.openPosition({ userId: uid, stakeCents: 5_000, direction: "sell", entryRate: 100, durationS: 10, gameDayId: 2, nonce: 2, openedAtMs: t0 + 1 });
+
+    // Full timeline: all four events, newest-first by createdAtMs.
+    const all = await json(await req(api, "GET", `/api/v1/admin/users/${uid}/activity`, { token: "admin-1:admin" }));
+    assert.equal(all.items.length, 4);
+    const kinds = all.items.map((i: any) => i.kind).sort();
+    assert.deepEqual(kinds, ["bet", "bet", "deposit", "withdrawal"]);
+    for (let i = 1; i < all.items.length; i++) {
+      assert.ok(all.items[i - 1].createdAtMs >= all.items[i].createdAtMs, "newest-first ordering");
+    }
+    // A settled bet exposes its position fields; cash events carry phone.
+    const settledBet = all.items.find((i: any) => i.kind === "bet" && i.status === "settled");
+    assert.equal(settledBet.result, "win");
+    assert.equal(settledBet.payoutCents, 30_000);
+    assert.equal(settledBet.amountCents, 10_000);
+    const dep = all.items.find((i: any) => i.kind === "deposit");
+    assert.equal(dep.phone, "254712009001");
+    assert.equal(dep.amountCents, 50_000);
+
+    // kind filter narrows to a single source.
+    const betsOnly = await json(await req(api, "GET", `/api/v1/admin/users/${uid}/activity?kind=bet`, { token: "admin-1:admin" }));
+    assert.equal(betsOnly.items.length, 2);
+    assert.ok(betsOnly.items.every((i: any) => i.kind === "bet"));
+
+    // Keyset pagination: limit=1 walks the whole timeline without dupes.
+    const seen = new Set<string>();
+    let cursor: string | null = null;
+    for (let guard = 0; guard < 10; guard++) {
+      const url = `/api/v1/admin/users/${uid}/activity?limit=1` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : "");
+      const page = await json(await req(api, "GET", url, { token: "admin-1:admin" }));
+      assert.ok(page.items.length <= 1);
+      for (const it of page.items) assert.ok(!seen.has(it.id), "no duplicate across pages"), seen.add(it.id);
+      cursor = page.nextCursor;
+      if (!cursor) break;
+    }
+    assert.equal(seen.size, 4);
+
+    // Invalid kind is rejected; player tokens are forbidden.
+    assert.equal((await req(api, "GET", `/api/v1/admin/users/${uid}/activity?kind=bogus`, { token: "admin-1:admin" })).status, 400);
+    assert.equal((await req(api, "GET", `/api/v1/admin/users/${uid}/activity`, { token: uid })).status, 403);
+  } finally { await api.close(); }
+});

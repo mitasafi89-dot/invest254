@@ -4,6 +4,7 @@ import type { Direction } from "@printpesa/shared";
 import {
   type Page, type PageQuery, clampLimit, decodeCursor, decodeKeyset, pageFrom,
 } from "./paging.js";
+import type { AdminBetSnapshot } from "./admin.js";
 
 /**
  * GameRepository: the durable, money-atomic boundary. "Open" (debit stake + insert
@@ -111,6 +112,20 @@ export class InMemoryGameRepository implements GameRepository {
 
   seed(userId: string, amount: Cents): void { this.balances.set(userId, assertCents(amount)); this.pushLedger(userId, "seed", amount, "real", null, "seed"); }
   async getBalance(userId: string): Promise<Cents> { return this.balances.get(userId) ?? 0; }
+
+  /** All of a user's positions projected for the admin activity timeline (J7). */
+  adminBetsOf(userId: string): AdminBetSnapshot[] {
+    const out: AdminBetSnapshot[] = [];
+    for (const p of this.positions.values()) {
+      if (p.userId !== userId) continue;
+      out.push({
+        id: p.id, status: p.status, direction: p.direction, stakeCents: p.stake,
+        payoutCents: p.payout, pnlCents: p.pnl, multiplier: p.multiplier, result: p.result,
+        openedAtMs: p.openedAtMs, settledAtMs: p.settledAtMs, gameDayId: p.gameDayId,
+      });
+    }
+    return out;
+  }
 
   async openPosition(a: OpenArgs): Promise<OpenResult> {
     if (a.stakeCents <= 0) throw new Error("INVALID_STAKE");
