@@ -5,28 +5,51 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   label?: string | undefined;
   error?: string | undefined;
   hint?: string | undefined;
+  /** Decoration rendered inside the field, before the input (e.g. an icon or country code). */
+  leading?: React.ReactNode;
+  /** Interactive/decoration node rendered inside the field, after the input (e.g. show/hide). */
+  trailing?: React.ReactNode;
 }
 
+/**
+ * Form input with an optional label, inline error/hint, and leading/trailing adornments.
+ * The focus ring lives on the wrapper so leading icons and trailing buttons sit flush inside
+ * the control. Backward compatible: omit `leading`/`trailing` for a plain field.
+ */
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, error, hint, id, className, ...props },
+  { label, error, hint, leading, trailing, id, className, ...props },
   ref,
 ) {
   const inputId = id ?? props.name;
   return (
-    <label htmlFor={inputId} className="flex flex-col gap-1 text-sm">
+    <label htmlFor={inputId} className="flex flex-col gap-1.5 text-sm">
       {label ? <span className="font-medium text-fg">{label}</span> : null}
-      <input
-        id={inputId}
-        ref={ref}
+      <span
         className={cn(
-          'h-11 w-full rounded-xl border bg-surface-2 px-3 text-fg placeholder:text-muted',
-          'outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'group flex items-center rounded-xl border bg-surface-2 transition',
+          'focus-within:ring-2 focus-within:ring-accent focus-within:border-accent',
           error ? 'border-down' : 'border-border',
-          className,
         )}
-        aria-invalid={error ? true : undefined}
-        {...props}
-      />
+      >
+        {leading ? (
+          <span className="flex shrink-0 items-center pl-3 text-muted">{leading}</span>
+        ) : null}
+        <input
+          id={inputId}
+          ref={ref}
+          className={cn(
+            'h-12 w-full rounded-xl bg-transparent px-3.5 text-fg outline-none placeholder:text-muted',
+            leading ? 'pl-2.5' : undefined,
+            trailing ? 'pr-1.5' : undefined,
+            className,
+          )}
+          aria-invalid={error ? true : undefined}
+          {...props}
+        />
+        {trailing ? (
+          <span className="flex shrink-0 items-center pr-2 text-muted">{trailing}</span>
+        ) : null}
+      </span>
       {error ? (
         <span className="text-xs text-down">{error}</span>
       ) : hint ? (
