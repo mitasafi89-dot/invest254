@@ -37,6 +37,7 @@ export interface AdminUserListQuery extends PageQuery { role?: string | undefine
 export interface AdminWithdrawalListQuery extends PageQuery { status?: string | undefined; }
 export interface SetUserStatusResult { userId: string; status: string; }
 export interface SetCommissionRateResult { userId: string; commissionRate: number; }
+export interface SetUserRoleResult { userId: string; role: string; }
 /** Result of a manual wallet balance adjustment (J3). */
 export interface AdjustBalanceResult { userId: string; amountCents: Cents; newBalanceCents: Cents; direction: "credit" | "debit"; }
 /** A deposit transaction as the admin deposits monitor sees it (J3). */
@@ -124,6 +125,7 @@ export interface AdminRepository {
   getUserDetail(userId: string): Promise<AdminUserDetail | null>;
   setUserStatus(actorId: string, actorRole: string, targetId: string, status: string, reason: string | null): Promise<SetUserStatusResult>;
   setCommissionRate(actorId: string, actorRole: string, targetId: string, rate: number): Promise<SetCommissionRateResult>;
+  setUserRole(actorId: string, actorRole: string, targetId: string, role: string): Promise<SetUserRoleResult>;
   listWithdrawals(q: AdminWithdrawalListQuery): Promise<Page<AdminWithdrawalRow>>;
   listAudit(q: PageQuery): Promise<Page<AdminAuditRow>>;
   adjustBalance(actorId: string, actorRole: string, targetId: string, amountCents: Cents, reason: string): Promise<AdjustBalanceResult>;
@@ -150,6 +152,7 @@ export interface AdminRepository {
 
 const VALID_STATUS = ["active", "suspended", "banned"];
 const ADMIN_ROLES = ["admin", "superadmin"];
+const VALID_ROLES = ["player", "marketer", "admin", "superadmin"];
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Rolling windows for the realised-RTP monitor (J5). `days = null` is all-time. */
@@ -285,7 +288,7 @@ const inRange = (d: string, r: ReportRange): boolean => (r.from == null || d >= 
 /** Re-raise the bare admin error code the RPCs raise instead of the wrapped pg message. */
 function mapAdminError(e: unknown): never {
   const msg = (e as { message?: string })?.message ?? String(e);
-  const m = msg.match(/(NOT_AUTHORIZED|INVALID_STATUS|NO_SELF_ACTION|USER_NOT_FOUND|INSUFFICIENT_PRIVILEGE|INVALID_RATE|NOT_AFFILIATE|REASON_REQUIRED|INVALID_AMOUNT|INSUFFICIENT_FUNDS|WALLET_NOT_FOUND|INVALID_CONFIG|INVALID_DATE|PAST_DATE|SEED_REVEALED|NOT_FOUND)/);
+  const m = msg.match(/(NOT_AUTHORIZED|INVALID_STATUS|NO_SELF_ACTION|USER_NOT_FOUND|INSUFFICIENT_PRIVILEGE|INVALID_RATE|NOT_AFFILIATE|REASON_REQUIRED|INVALID_AMOUNT|INVALID_ROLE|INSUFFICIENT_FUNDS|WALLET_NOT_FOUND|INVALID_CONFIG|INVALID_DATE|PAST_DATE|SEED_REVEALED|NOT_FOUND)/);
   throw new Error(m ? m[1] : msg);
 }
 
@@ -368,6 +371,14 @@ export class PgAdminRepository implements AdminRepository {
       const r = await this.q.query("select user_id, status from fn_admin_set_user_status($1,$2,$3,$4,$5)", [actorId, actorRole, targetId, status, reason]);
       const x = r.rows[0];
       return { userId: String(x.user_id), status: String(x.status) };
+    } catch (e) { mapAdminError(e); }
+  }
+
+  async setUserRole(actorId: string, actorRole: string, targetId: string, role: string): Promise<SetUserRoleResult> {
+    try {
+      const r = await this.q.query("select user_id, role from fn_admin_set_user_role($1,$2,$3,$4)", [actorId, actorRole, targetId, role]);
+      const x = r.rows[0];
+      return { userId: String(x.user_id), role: String(x.role) };
     } catch (e) { mapAdminError(e); }
   }
 
@@ -772,6 +783,18 @@ export class InMemoryAdminRepository implements AdminRepository {
     this.identity.adminSetStatus(targetId, status);
     this.record(actorId, actorRole, "user.status", "user", targetId, { from, to: status, reason });
     return { userId: targetId, status };
+  }
+
+  async setUserRole(actorId: string, actorRole: string, targetId: string, role: string): Promise<SetUserRoleResult> {
+    if (actorRole !== "superadmin") throw new Error("NOT_AUTHORIZED");
+    if (!VALID_ROLES.includes(role)) throw new Error("INVALID_ROLE");
+    if (actorId === targetId) throw new Error("NO_SELF_ACTION");
+    const u = this.identity.adminUser(targetId);
+    if (!u) throw new Error("USER_NOT_FOUND");
+    const from = u.role;
+    this.identity.adminSetRole(targetId, role);
+    this.record(actorId, actorRole, "user.role", "user", targetId, { from, to: role });
+    return { userId: targetId, role };
   }
 
   async setCommissionRate(actorId: string, actorRole: string, targetId: string, rate: number): Promise<SetCommissionRateResult> {

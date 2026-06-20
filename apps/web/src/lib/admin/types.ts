@@ -61,6 +61,10 @@ export interface SetUserStatusResult {
   userId: string;
   status: string;
 }
+export interface SetUserRoleResult {
+  userId: string;
+  role: string;
+}
 export interface AdjustBalanceResult {
   userId: string;
   amountCents: Cents;

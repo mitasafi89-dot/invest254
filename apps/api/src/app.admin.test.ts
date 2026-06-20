@@ -231,6 +231,28 @@ test("M-Pesa config: admin reads masked; only superadmin edits; secrets write-on
   } finally { await api.close(); }
 });
 
+test("user role: only superadmin promotes/demotes; validates; no self-action; audited", async () => {
+  const api = await startTestApi();
+  try {
+    const uid = await register(api, "0712000099", "role_target");
+
+    // a plain admin cannot change roles (superadmin only)
+    assert.equal((await req(api, "POST", `/api/v1/admin/users/${uid}/role`, { token: "admin-1:admin", body: { role: "marketer" } })).status, 403);
+
+    // superadmin promotes player -> marketer
+    const up = await req(api, "POST", `/api/v1/admin/users/${uid}/role`, { token: "root-1:superadmin", body: { role: "marketer" } });
+    assert.equal(up.status, 200);
+    assert.equal((await json(up)).role, "marketer");
+
+    // invalid role -> 400; self-action -> 409
+    assert.equal((await req(api, "POST", `/api/v1/admin/users/${uid}/role`, { token: "root-1:superadmin", body: { role: "wizard" } })).status, 400);
+    assert.equal((await req(api, "POST", `/api/v1/admin/users/root-1/role`, { token: "root-1:superadmin", body: { role: "admin" } })).status, 409);
+
+    const audit = await json(await req(api, "GET", "/api/v1/admin/audit", { token: "root-1:superadmin" }));
+    assert.ok(audit.items.some((a: any) => a.action === "user.role" && a.targetId === uid));
+  } finally { await api.close(); }
+});
+
 test("J5 RTP monitor: target derived from house_edge, rolling windows, no alert on empty data", async () => {
   const api = await startTestApi();
   try {

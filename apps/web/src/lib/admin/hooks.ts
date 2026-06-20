@@ -53,6 +53,18 @@ export function useSetUserStatus() {
     },
   });
 }
+export function useSetUserRole() {
+  const t = useTok();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; role: string }) => adminApi.setUserRole(t, v.id, v.role),
+    onSuccess: (_d, v) => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'user', v.id] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'overview'] });
+    },
+  });
+}
 export function useAdjustBalance() {
   const t = useTok();
   const qc = useQueryClient();

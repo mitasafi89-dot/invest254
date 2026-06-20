@@ -5,7 +5,7 @@ import type {
   AdjustBalanceResult, AdminDepositRow, AdminDepositListQuery, AdminDepositsReconcile,
   ReportRange, DailyReportRow, UserReportRow,
   GameConfigRow, GameConfigPatch, RtpMonitor, AdminSeedRow, SeedRotateResult,
-  MpesaConfigRow, MpesaConfigPatch,
+  MpesaConfigRow, MpesaConfigPatch, SetUserRoleResult,
   AdminPayoutRow, AdminPayoutListQuery, AdminChatModRow,
 } from "./admin.js";
 
@@ -34,6 +34,11 @@ export class AdminService {
 
   setCommissionRate(actorId: string, actorRole: string, targetId: string, rate: number): Promise<SetCommissionRateResult> {
     return this.repo.setCommissionRate(actorId, actorRole, targetId, rate);
+  }
+
+  /** Promote/demote a user's role (superadmin) — guards + audit live in the repo/RPC. */
+  setUserRole(actorId: string, actorRole: string, targetId: string, role: string): Promise<SetUserRoleResult> {
+    return this.repo.setUserRole(actorId, actorRole, targetId, role);
   }
 
   listWithdrawals(q: AdminWithdrawalListQuery): Promise<Page<AdminWithdrawalRow>> { return this.repo.listWithdrawals(q); }

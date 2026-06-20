@@ -28,6 +28,7 @@ const ADMIN_STATUS: Readonly<Record<string, number>> = {
   NO_SELF_ACTION: 409,
   INVALID_STATUS: 400,
   INVALID_RATE: 400,
+  INVALID_ROLE: 400,
   INVALID_AMOUNT: 400,
   REASON_REQUIRED: 400,
   INSUFFICIENT_FUNDS: 409,
@@ -205,6 +206,16 @@ export function registerAdminRoutes(router: Router, deps: ApiDeps): void {
       return domain(() => deps.admin.setUserStatus(ctx.claims!.userId, ctx.claims!.role ?? "player", ctx.params.id!, STATUS_ACTION[action]!, reason));
     });
   }
+
+  // Role management — superadmin only (promote/demote). Effective on the target's next login.
+  router.post(`${BASE}/admin/users/:id/role`, auth, superadmin, async (ctx: Ctx) => {
+    const body = ctx.body && typeof ctx.body === "object" ? (ctx.body as Record<string, unknown>) : {};
+    const role = typeof body.role === "string" ? body.role : "";
+    if (!["player", "marketer", "admin", "superadmin"].includes(role)) {
+      throw new ApiError("VALIDATION", "role must be player|marketer|admin|superadmin", 400);
+    }
+    return domain(() => deps.admin.setUserRole(ctx.claims!.userId, ctx.claims!.role ?? "player", ctx.params.id!, role));
+  });
 
   router.patch(`${BASE}/admin/affiliates/:id/rate`, auth, admin, async (ctx: Ctx) => {
     const body = ctx.body && typeof ctx.body === "object" ? (ctx.body as Record<string, unknown>) : {};

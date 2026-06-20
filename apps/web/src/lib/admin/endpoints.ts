@@ -19,6 +19,7 @@ import type {
   RtpMonitor,
   AdminSeedRow,
   SeedRotateResult,
+  SetUserRoleResult,
   SetUserStatusResult,
   UserReportRow,
 } from '@/lib/admin/types';
@@ -42,6 +43,8 @@ export const adminApi = {
   user: (t: string, id: string) => apiFetch<AdminUserDetail>(`/admin/users/${id}`, { token: t }),
   setUserStatus: (t: string, id: string, action: 'suspend' | 'ban' | 'reactivate', reason?: string) =>
     apiFetch<SetUserStatusResult>(`/admin/users/${id}/${action}`, { method: 'POST', token: t, body: { reason } }),
+  setUserRole: (t: string, id: string, role: string) =>
+    apiFetch<SetUserRoleResult>(`/admin/users/${id}/role`, { method: 'POST', token: t, body: { role } }),
   adjustBalance: (t: string, id: string, amountCents: number, reason: string) =>
     apiFetch<AdjustBalanceResult>(`/admin/wallets/${id}/adjust`, { method: 'POST', token: t, body: { amountCents, reason } }),
 

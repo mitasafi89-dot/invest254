@@ -10,8 +10,11 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { ApiError } from '@/lib/api/client';
 import { useToast } from '@/lib/toast/ToastProvider';
 import { formatDateTime } from '@/lib/format';
+import { useSession } from '@/lib/auth/session';
 import { PageHeader, StatCard, Section, Empty, ConfirmButton } from '@/components/admin/ui';
-import { useUser, useSetUserStatus, useAdjustBalance, useSetCommissionRate } from '@/lib/admin/hooks';
+import { useUser, useSetUserStatus, useAdjustBalance, useSetCommissionRate, useSetUserRole } from '@/lib/admin/hooks';
+
+const ROLES = ['player', 'marketer', 'admin', 'superadmin'] as const;
 
 export default function UserDetailPage({ params }: { params: { id: string } }) {
   const id = params.id;
@@ -55,6 +58,7 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
           </Section>
 
           <StatusActions id={id} status={q.data.status} />
+          <RoleManage id={id} current={q.data.role} />
           <BalanceAdjust id={id} />
           {q.data.role === 'marketer' ? <CommissionRate id={id} /> : null}
         </>
@@ -114,6 +118,59 @@ function StatusActions({ id, status }: { id: string; status: string }) {
         </div>
         <p className="text-xs text-muted">Suspended users can&apos;t log in; banned is permanent. Every change is audited.</p>
       </Card>
+    </Section>
+  );
+}
+
+function RoleManage({ id, current }: { id: string; current: string }) {
+  const m = useSetUserRole();
+  const toast = useToast();
+  const myRole = useSession((s) => s.user?.role);
+  const [role, setRole] = useState(current);
+
+  // Role changes are sensitive — superadmin only (the API enforces this too).
+  if (myRole !== 'superadmin') return null;
+
+  function run() {
+    m.mutate(
+      { id, role },
+      {
+        onSuccess: () => toast.push({ tone: 'success', title: 'Role updated', description: 'Takes effect on the user’s next login.' }),
+        onError: (e) => toast.push({ tone: 'error', title: 'Update failed', description: e instanceof ApiError ? e.message : 'Try again.' }),
+      },
+    );
+  }
+
+  return (
+    <Section title="Role">
+      <Card className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <label className="flex flex-1 flex-col gap-1 text-sm">
+          <span className="text-muted">Account role</span>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="h-10 w-full rounded-xl border border-border bg-surface-2 px-3 text-sm text-fg outline-none focus:border-accent"
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <ConfirmButton
+          label="Change role"
+          confirmLabel="Confirm role change"
+          size="md"
+          variant={role === 'admin' || role === 'superadmin' ? 'down' : 'primary'}
+          busy={m.isPending}
+          disabled={role === current}
+          onConfirm={run}
+        />
+      </Card>
+      <p className="text-xs text-muted">
+        Promoting to admin or superadmin grants back-office access. Changes are audited and apply on the user’s next login.
+      </p>
     </Section>
   );
 }

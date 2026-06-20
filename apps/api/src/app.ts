@@ -31,7 +31,7 @@ export interface ApiDeps {
     | "requestPayout" | "approvePayout" | "completePayout" | "rejectPayout">;
   /** Admin back office (J2): dashboard reads, user status, commission rate, withdrawal queue, audit. */
   admin: Pick<AdminService,
-    "overview" | "listUsers" | "getUserDetail" | "setUserStatus" | "setCommissionRate" | "listWithdrawals" | "listAudit"
+    "overview" | "listUsers" | "getUserDetail" | "setUserStatus" | "setCommissionRate" | "setUserRole" | "listWithdrawals" | "listAudit"
     | "adjustBalance" | "listDeposits" | "depositsReconcile" | "reportDaily" | "reportByUser"
     | "getGameConfig" | "updateGameConfig" | "getMpesaConfig" | "updateMpesaConfig" | "rtpMonitor" | "listSeeds" | "rotateSeed"
     | "listAffiliatePayouts" | "listChat" | "hideChat" | "unhideChat" | "recordAction">;
