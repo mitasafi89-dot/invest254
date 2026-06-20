@@ -57,12 +57,17 @@ export function registerAffiliateRoutes(router: Router, deps: ApiDeps): void {
 
   router.post(`${BASE}/affiliate/enroll`, auth, async (ctx: Ctx) => {
     const e = await domain(() => deps.affiliate.enroll(ctx.claims!.userId));
+    // Enrollment promotes player -> marketer in the DB, but the caller's JWT still carries the
+    // old role. Reissue a token that reflects the new role so the marketer-gated dashboard routes
+    // (summary/referrals/commissions/payouts) work immediately, without forcing a re-login.
+    const token = deps.verifier ? await deps.auth.issueToken(ctx.claims!.userId, e.role) : undefined;
     return {
       referralCode: e.referralCode,
       commissionRate: e.commissionRate,
       status: e.status,
       role: e.role,
       referralPath: e.referralPath,
+      ...(token ? { token } : {}),
     };
   });
 

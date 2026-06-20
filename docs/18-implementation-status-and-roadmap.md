@@ -107,7 +107,7 @@ Per-phase status:
 | FE3 | Game core (realtime curve) | ✅ | `GameSocketProvider` → real engine WS; canvas curve. |
 | FE4 | Betting & positions | ✅ | `BetPanel`, `positions/*`, settlement via WS. |
 | FE5 | Social & engagement (activity, chat) | ✅ | `Feed`, `ActivityTicker`; real WS chat. |
-| FE6 | Affiliate / referral | ✅ (new) | `/affiliate` dashboard + `/r/[code]` landing, real endpoints. |
+| FE6 | Affiliate / referral | ✅ (new) | `/affiliate` dashboard + `/r/[code]` landing, real endpoints. Fixed a stale-JWT-role bug where a just-enrolled marketer got 403 on dashboard reads until re-login — enroll now reissues a marketer token (commit on `main`). |
 | FE7 | Hardening, PWA, polish, **tests**, a11y, perf | 🟡 | Legal/RG pages, footer, PWA (manifest+SW+icons), error boundaries **done**; **0 tests, no Lighthouse/a11y audit, no promo UI, no analytics**. |
 | FE8 | Trade-screen design replica | ✅ | `/` matches the reference layout. |
 

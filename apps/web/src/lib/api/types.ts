@@ -125,6 +125,8 @@ export interface AffiliateEnrollment {
   commissionRate: number;
   status: string;
   role: string;
+  /** Fresh JWT reflecting the promoted marketer role (so dashboard routes work without re-login). */
+  token?: string;
 }
 
 /** GET /affiliate/summary — marketer dashboard aggregates (monetary fields in cents). */

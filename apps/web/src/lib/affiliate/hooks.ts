@@ -41,10 +41,13 @@ export function useAffiliateCommissions(enabled: boolean) {
 /** Enroll the current user as a marketer (idempotent server-side). */
 export function useAffiliateEnroll() {
   const token = useSession((s) => s.token);
+  const setToken = useSession((s) => s.setToken);
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => api.affiliateEnroll(token as string),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Adopt the reissued marketer token so the marketer-gated dashboard routes succeed.
+      if (data.token) setToken(data.token);
       void qc.invalidateQueries({ queryKey: ['affiliate'] });
     },
   });

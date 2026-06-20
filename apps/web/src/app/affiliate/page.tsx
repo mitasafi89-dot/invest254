@@ -64,8 +64,10 @@ function EnrollCard() {
 
   async function onEnroll() {
     try {
-      await enroll.mutateAsync();
-      if (token) await refresh(token); // promote role player -> marketer in session
+      const res = await enroll.mutateAsync();
+      // refresh /me with the reissued token so the session role flips to marketer immediately.
+      const fresh = res.token ?? token;
+      if (fresh) await refresh(fresh);
       toast.push({ tone: 'success', title: "You're an affiliate", description: 'Share your link to start earning.' });
     } catch (e) {
       toast.push({
