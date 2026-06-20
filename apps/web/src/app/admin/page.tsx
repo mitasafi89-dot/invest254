@@ -1,9 +1,17 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Money } from '@/components/ui/Money';
 import { PageHeader, StatCard, Section, TableWrap, Th, Td, Empty } from '@/components/admin/ui';
-import { useOverview, useRtp } from '@/lib/admin/hooks';
+import { AreaChart, GroupedBars, ChartCard, LegendDot, kesCompact, type Point } from '@/components/admin/charts';
+import { useOverview, useRtp, useReportDaily } from '@/lib/admin/hooks';
+
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function AdminOverviewPage() {
   const o = useOverview();
@@ -12,6 +20,8 @@ export default function AdminOverviewPage() {
   return (
     <>
       <PageHeader title="Overview" subtitle="System health at a glance — users, finance, affiliate and game." />
+
+      <TrendsSection />
 
       {o.isLoading ? (
         <Skeleton className="h-40 w-full" />
@@ -127,4 +137,67 @@ export default function AdminOverviewPage() {
 
 function pct(v: number): string {
   return `${(v * 100).toFixed(1)}%`;
+}
+
+/** 30-day financial trend charts, derived from the daily report time series. */
+function TrendsSection() {
+  const from = useMemo(() => isoDaysAgo(30), []);
+  const to = useMemo(() => isoDaysAgo(0), []);
+  const q = useReportDaily({ from, to });
+
+  const rows = useMemo(() => [...(q.data?.items ?? [])].sort((a, b) => a.date.localeCompare(b.date)), [q.data]);
+
+  const shortDay = (d: string) => d.slice(5); // MM-DD
+  const deposits: Point[] = rows.map((r) => ({ label: shortDay(r.date), value: r.depositsCents }));
+  const withdrawals: Point[] = rows.map((r) => ({ label: shortDay(r.date), value: r.withdrawalsCents }));
+  const turnover: Point[] = rows.map((r) => ({ label: shortDay(r.date), value: r.turnoverCents }));
+  const ggr: Point[] = rows.map((r) => ({ label: shortDay(r.date), value: r.ggrCents }));
+
+  const sum = (pts: Point[]) => pts.reduce((s, p) => s + p.value, 0);
+  const ggrTotal = sum(ggr);
+
+  return (
+    <Section title="Trends — last 30 days">
+      {q.isLoading ? (
+        <Skeleton className="h-56 w-full" />
+      ) : q.isError ? (
+        <Empty title="Trends unavailable" description="Try again shortly." />
+      ) : rows.length === 0 ? (
+        <Empty title="No activity yet" description="Charts populate as deposits, trades and payouts accrue." />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <ChartCard
+            title="Deposits vs withdrawals"
+            readout={`${kesCompact(sum(deposits))} in`}
+            legend={
+              <>
+                <LegendDot tone="up" label="Deposits" />
+                <LegendDot tone="down" label="Withdrawals" />
+              </>
+            }
+          >
+            <GroupedBars
+              a={{ label: 'Deposits', points: deposits, tone: 'up' }}
+              b={{ label: 'Withdrawals', points: withdrawals, tone: 'down' }}
+            />
+          </ChartCard>
+
+          <ChartCard title="Turnover" readout={kesCompact(sum(turnover))}>
+            <AreaChart points={turnover} tone="accent" />
+          </ChartCard>
+
+          <ChartCard title="Net revenue (GGR)" readout={kesCompact(ggrTotal)}>
+            <AreaChart points={ggr} tone={ggrTotal >= 0 ? 'up' : 'down'} />
+          </ChartCard>
+
+          <ChartCard
+            title="Withdrawals"
+            readout={`${kesCompact(sum(withdrawals))} out`}
+          >
+            <AreaChart points={withdrawals} tone="down" />
+          </ChartCard>
+        </div>
+      )}
+    </Section>
+  );
 }
