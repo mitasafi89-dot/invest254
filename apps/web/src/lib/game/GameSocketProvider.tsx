@@ -74,16 +74,26 @@ const Ctx = createContext<GameSocketValue | null>(null);
 const SYNTH_SPACING_MS = 150;
 const SYNTH_SPAN_MS = 60_000;
 
-/** Smooth synthetic curve, biased upward so ~75% sits above 0 (green) — matches server feel. */
-function synthValue(t: number): number {
-  const s = t / 1000;
-  const v =
-    0.40 * Math.sin(s * 1.7) +
-    0.25 * Math.sin(s * 0.9 + 1.3) +
-    0.16 * Math.sin(s * 3.1 + 0.5) +
-    0.28;
-  return Math.max(-0.92, Math.min(0.92, v));
+// Mean-reverting random walk (Ornstein–Uhlenbeck) → an organic, price-chart-like
+// curve: broad green hills with occasional red dips. Reverts to a positive mean so
+// it stays mostly green (~80%) like the live server feed.
+const SYNTH_MU = 0.32;
+const SYNTH_THETA = 0.035;
+const SYNTH_SIGMA = 0.08;
+
+/** Approx. standard normal from three uniforms (mean 0, std 1). */
+function gaussian(): number {
+  return (Math.random() + Math.random() + Math.random() - 1.5) / 0.5;
 }
+
+/** Next signed curve value ∈ [-0.9, 0.9] given the previous one. */
+function nextSynth(prev: number): number {
+  const v = prev + SYNTH_THETA * (SYNTH_MU - prev) + SYNTH_SIGMA * gaussian();
+  return Math.max(-0.9, Math.min(0.9, v));
+}
+
+const synthRate = (value: number) => CURVE_BASE_RATE + CURVE_AMPLITUDE * value;
+const rateToValue = (rate: number) => (rate - CURVE_BASE_RATE) / CURVE_AMPLITUDE;
 
 function isTick(v: unknown): v is Tick {
   return (
@@ -246,12 +256,14 @@ export function GameSocketProvider({ children }: { children: React.ReactNode }) 
       const now = Date.now();
       const count = Math.floor(SYNTH_SPAN_MS / SYNTH_SPACING_MS);
       const seed: Tick[] = [];
-      let prev = CURVE_BASE_RATE;
+      let val = SYNTH_MU;
+      let prevRate = synthRate(val);
       for (let i = count; i > 0; i--) {
         const t = now - i * SYNTH_SPACING_MS;
-        const rate = CURVE_BASE_RATE + CURVE_AMPLITUDE * synthValue(t);
-        seed.push({ t, rate, delta: rate - prev });
-        prev = rate;
+        val = nextSynth(val);
+        const rate = synthRate(val);
+        seed.push({ t, rate, delta: rate - prevRate });
+        prevRate = rate;
       }
       ticksRef.current = seed;
     }
@@ -262,9 +274,9 @@ export function GameSocketProvider({ children }: { children: React.ReactNode }) 
       }
       const buf = ticksRef.current;
       const t = Date.now();
-      const prev = buf.length > 0 ? buf[buf.length - 1]!.rate : CURVE_BASE_RATE;
-      const rate = CURVE_BASE_RATE + CURVE_AMPLITUDE * synthValue(t);
-      buf.push({ t, rate, delta: rate - prev });
+      const prevRate = buf.length > 0 ? buf[buf.length - 1]!.rate : synthRate(SYNTH_MU);
+      const rate = synthRate(nextSynth(rateToValue(prevRate)));
+      buf.push({ t, rate, delta: rate - prevRate });
       if (buf.length > MAX_TICKS) buf.splice(0, buf.length - MAX_TICKS);
     }, SYNTH_SPACING_MS);
     return () => clearInterval(id);
