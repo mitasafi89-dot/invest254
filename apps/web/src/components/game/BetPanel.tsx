@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/api/endpoints';
 import { useSession } from '@/lib/auth/session';
 import { useAuthUi } from '@/lib/auth/ui';
+import { useDepositUi } from '@/lib/wallet/depositUi';
 import { useWallet } from '@/lib/wallet/hooks';
 import { useHydrated } from '@/lib/useHydrated';
 import { useGameSocket } from '@/lib/game/GameSocketProvider';
@@ -26,6 +27,9 @@ export function BetPanel() {
   const hydrated = useHydrated();
   const token = useSession((s) => s.token);
   const openAuth = useAuthUi((s) => s.openAuth);
+  const openDeposit = useDepositUi((s) => s.openDeposit);
+  const pendingTrade = useDepositUi((s) => s.pending);
+  const clearPending = useDepositUi((s) => s.clearPending);
 
   const { data: config } = useQuery({
     queryKey: ['gameConfig'],
@@ -42,6 +46,7 @@ export function BetPanel() {
   const [stake, setStake] = useState<string>('');
   const [durationS, setDurationS] = useState<number>(defaultDurationS);
   const [armed, setArmed] = useState<Direction | null>(null);
+  const [justFunded, setJustFunded] = useState(false);
 
   // Seed the stake field with the minimum once config arrives.
   useEffect(() => {
@@ -69,13 +74,22 @@ export function BetPanel() {
   const connecting = status !== 'open';
 
   // Disarm any pending confirm when the stake changes.
-  useEffect(() => setArmed(null), [stake]);
+  useEffect(() => { setArmed(null); setJustFunded(false); }, [stake]);
+
+  // Resume after a top-up: once the deposit lands and the balance covers the saved trade,
+  // restore the chosen direction as an armed one-tap confirm. We never auto-fire real money.
+  useEffect(() => {
+    if (!pendingTrade || activePosition || status !== 'open') return;
+    if (!Number.isFinite(balanceReal) || balanceReal < pendingTrade.stakeCents) return;
+    setArmed(pendingTrade.direction);
+    setJustFunded(true);
+    clearPending();
+  }, [pendingTrade, activePosition, status, balanceReal, clearPending]);
 
   const errorHint = (() => {
     if (!Number.isFinite(stakeCents)) return null;
     if (!validStake) return `Minimum stake is ${formatKes(minStakeCents)}.`;
     if (overMax && maxStakeCents !== undefined) return `Maximum stake is ${formatKes(maxStakeCents)}.`;
-    if (overBalance) return 'Stake exceeds your balance.';
     return null;
   })();
 
@@ -94,13 +108,19 @@ export function BetPanel() {
       openAuth('login');
       return;
     }
-    if (!validStake || overMax || overBalance) return;
+    if (!validStake || overMax) return;
+    // Highest-intent moment: no/short balance -> convert the tap into a funded deposit, then resume.
+    if (overBalance) {
+      openDeposit({ amountCents: stakeCents, pending: { direction: dir, stakeCents } });
+      return;
+    }
     if (stakeCents >= CONFIRM_CENTS && armed !== dir) {
       setArmed(dir);
       return;
     }
     openPosition({ stakeCents, direction: dir, durationS });
     setArmed(null);
+    setJustFunded(false);
   }
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -203,10 +223,16 @@ export function BetPanel() {
         </Button>
       </div>
 
-      {armed ? (
+      {justFunded && armed ? (
+        <p className="text-center text-[11px] font-medium text-up">
+          Funds added — tap {armed === 'buy' ? 'BUY' : 'SELL'} to place your {formatKes(stakeCents)} trade.
+        </p>
+      ) : armed ? (
         <p className="text-center text-[11px] text-muted">Tap again to confirm your stake.</p>
       ) : !token ? (
         <p className="text-center text-[11px] text-muted">You&apos;ll be asked to log in to place a trade.</p>
+      ) : overBalance ? (
+        <p className="text-center text-[11px] text-warn">Not enough balance — tap BUY or SELL to add money and trade.</p>
       ) : null}
     </Card>
   );

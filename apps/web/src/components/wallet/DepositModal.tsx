@@ -1,15 +1,21 @@
- 'use client';
+'use client';
 
-import { useState } from 'react';
-import { kesToCents } from '@printpesa/shared/money';
+import { useEffect, useState } from 'react';
+import { centsToKes, formatKes, kesToCents } from '@printpesa/shared/money';
 import { normalizeMsisdn } from '@printpesa/shared/payments';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useDeposit } from '@/lib/wallet/hooks';
+import { useDepositUi } from '@/lib/wallet/depositUi';
 import { authErrorMessage } from '@/lib/auth/errors';
 
-export function DepositModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function DepositModal() {
+  const open = useDepositUi((s) => s.open);
+  const close = useDepositUi((s) => s.close);
+  const prefillAmountCents = useDepositUi((s) => s.prefillAmountCents);
+  const pending = useDepositUi((s) => s.pending);
+
   const deposit = useDeposit();
   const [amount, setAmount] = useState('');
   const [phone, setPhone] = useState('');
@@ -17,7 +23,18 @@ export function DepositModal({ open, onClose }: { open: boolean; onClose: () => 
   const [serverError, setServerError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // Reset on each open; prefill the amount to cover an intended stake when provided.
+  useEffect(() => {
+    if (!open) return;
+    setErrors({});
+    setServerError(null);
+    setDone(false);
+    if (prefillAmountCents && prefillAmountCents > 0) setAmount(String(centsToKes(prefillAmountCents)));
+  }, [open, prefillAmountCents]);
+
   if (!open) return null;
+
+  const intentLabel = pending ? (pending.direction === 'buy' ? 'BUY' : 'SELL') : null;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,18 +58,27 @@ export function DepositModal({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Deposit">
-      <Header title="Deposit via M-Pesa" onClose={onClose} />
+    <Modal open={open} onClose={close} title="Deposit">
+      <Header title="Deposit via M-Pesa" onClose={close} />
       {done ? (
         <div className="flex flex-col gap-3 p-4">
           <p className="rounded-xl border border-up/40 bg-up/10 px-3 py-2 text-sm text-up">
             STK push sent. Check your phone and enter your M-Pesa PIN to complete the deposit.
           </p>
-          <p className="text-xs text-muted">Your balance updates automatically once M-Pesa confirms.</p>
-          <Button fullWidth onClick={onClose}>Done</Button>
+          <p className="text-xs text-muted">
+            {intentLabel
+              ? `Your balance updates automatically — your ${intentLabel} trade will be ready to confirm the moment it lands.`
+              : 'Your balance updates automatically once M-Pesa confirms.'}
+          </p>
+          <Button fullWidth onClick={close}>Done</Button>
         </div>
       ) : (
         <form className="flex flex-col gap-3 p-4" onSubmit={onSubmit} noValidate>
+          {pending && prefillAmountCents ? (
+            <p className="rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-fg">
+              Add money to place your {formatKes(prefillAmountCents)} {intentLabel} trade. You can change the amount below.
+            </p>
+          ) : null}
           <Input
             label="Amount (KES)"
             name="amount"

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { DepositModal } from '@/components/wallet/DepositModal';
 import { SessionBootstrap } from '@/components/auth/SessionBootstrap';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -12,6 +13,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <BottomNav />
       <SessionBootstrap />
       <AuthModal />
+      <DepositModal />
     </div>
   );
 }
