@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CurveGenerator, SettlementEngine, DEFAULT_CONFIG } from "@printpesa/shared";
+import { CurveGenerator, SettlementEngine, DEFAULT_CONFIG } from "@invest254/shared";
 import { InMemoryGameRepository } from "./wallet.js";
 import { GameServer } from "./game.js";
 

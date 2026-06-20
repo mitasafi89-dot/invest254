@@ -5,7 +5,7 @@
 > spec. Pairs with the redesigned `/affiliate` dashboard.
 
 ## Q1 — Who is a marketer (affiliate)?
-A **marketer is a player who *also* promotes PrintPesa.** Becoming an affiliate is **additive** — it
+A **marketer is a player who *also* promotes Invest254.** Becoming an affiliate is **additive** — it
 never removes the player experience. A marketer can still deposit, trade, withdraw, and view history
 exactly like any player (every player route is auth-only and `marketer` outranks `player`, so nothing
 is gated away). On top of that, they get a unique referral link and earn **20% of the net gaming
@@ -22,7 +22,7 @@ Two consequences that the product must respect:
    therefore generates house revenue but **never self-commission**. This is the correct
    anti-fraud posture and must be preserved.
 
-Because they advertise gambling in PrintPesa's name and are paid real money, they remain a **vetted,
+Because they advertise gambling in Invest254's name and are paid real money, they remain a **vetted,
 contractually-bound marketing agent** (see Q4) — but as a *person* they are still a player.
 
 ## Q2 — What does a marketer actually want to see? (minimum + useful)

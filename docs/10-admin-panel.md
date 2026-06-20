@@ -1,6 +1,6 @@
 # 10 — Admin Back Office
 
-A separate Next.js app at `admin.printpesa...`, REST-only, role-gated. Every mutating action is
+A separate Next.js app at `admin.invest254...`, REST-only, role-gated. Every mutating action is
 written to `audit_log` (actor, before/after).
 
 ## 1. Modules

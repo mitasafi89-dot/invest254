@@ -1,8 +1,8 @@
-import { rtp, type GameConfig, type Cents } from "@printpesa/shared";
+import { rtp, type GameConfig, type Cents } from "@invest254/shared";
 import type {
   FairnessRecord, ActivityRow, ChatRow, ChatPostResult, PaymentService, AuthService, AffiliateService, AdminService, Verifier,
   Page, PageQuery, LedgerEntry, PositionRecord, PositionDetail, PositionListQuery, TransactionRecord, TxListQuery,
-} from "@printpesa/engine";
+} from "@invest254/engine";
 import { Router, ApiError, serverFrom, type Ctx } from "./http.js";
 import { registerProtectedRoutes } from "./app.payments.js";
 import { registerHistoryRoutes } from "./app.history.js";

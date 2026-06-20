@@ -2,8 +2,8 @@ import {
   validatePassword,
   validateUsername,
   validateReferralCode,
-} from '@printpesa/shared/credentials';
-import { normalizeMsisdn } from '@printpesa/shared/payments';
+} from '@invest254/shared/credentials';
+import { normalizeMsisdn } from '@invest254/shared/payments';
 
 function pick(map: Record<string, string>, reason: string | undefined, fallback: string): string {
   return (reason ? map[reason] : undefined) ?? fallback;

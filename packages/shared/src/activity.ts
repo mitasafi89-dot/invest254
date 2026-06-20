@@ -55,7 +55,7 @@ export function activityMessage(kind: ActivityKind, username: string, amountCent
     case "withdrawal": return `🎉 CONGRATULATIONS @${username} on withdrawal of ${formatKes(amountCents ?? 0)}`;
     case "win": return `@${username} just won ${formatKes(amountCents ?? 0)}${multiplier ? ` on a ×${multiplier.toFixed(2)} trade` : ""}`;
     case "bonus": return `BONUS of ${formatKes(amountCents ?? 0)} issued to @${username}`;
-    case "signup": return `@${username} just joined PrintPesa`;
+    case "signup": return `@${username} just joined Invest254`;
   }
 }
 

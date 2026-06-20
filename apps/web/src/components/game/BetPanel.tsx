@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { centsToKes, formatKes, kesToCents } from '@printpesa/shared/money';
-import type { Direction } from '@printpesa/shared';
+import { centsToKes, formatKes, kesToCents } from '@invest254/shared/money';
+import type { Direction } from '@invest254/shared';
 import { cn } from '@/lib/cn';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';

@@ -4,7 +4,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/endpoints';
 import type { Paginated, PositionDto } from '@/lib/api/types';
 import { useSession } from '@/lib/auth/session';
-import type { PositionStatus } from '@printpesa/shared';
+import type { PositionStatus } from '@invest254/shared';
 
 export type PositionStatusFilter = PositionStatus | 'all';
 

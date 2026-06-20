@@ -29,7 +29,7 @@ the web app. This does **not** change the fact that real gaps exist — they are
 
 ## 1. Executive summary
 
-PrintPesa is **back-end-heavy and front-end-light, with two whole product surfaces missing**:
+Invest254 is **back-end-heavy and front-end-light, with two whole product surfaces missing**:
 
 | Layer | Status | One-line reality |
 |---|---|---|
@@ -203,7 +203,7 @@ in parallel.
 interpolation) → component tests (BetPanel disabled/validation states, WalletWidget, AuthModal,
 Feed limits) → integration test of `useGameSocket` against a mock WS (open→update→settle, reconnect)
 → Playwright mobile-viewport E2E of the value loop (register → deposit → play → settle → withdraw →
-refer). Wire `npm -w @printpesa/web test` into CI.
+refer). Wire `npm -w @invest254/web test` into CI.
 **Done when:** CI runs web unit/component/integration + E2E green on mobile + desktop viewports.
 
 ### Phase C — Compliance: RG enforcement + KYC/age decision

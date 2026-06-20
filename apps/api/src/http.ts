@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
-import type { Verifier, AuthClaims } from "@printpesa/engine";
+import type { Verifier, AuthClaims } from "@invest254/engine";
 
 /**
- * A tiny, dependency-free HTTP router for the PrintPesa REST surface (docs/05). We use
+ * A tiny, dependency-free HTTP router for the Invest254 REST surface (docs/05). We use
  * Node's built-in http server plus a typed path-pattern router rather than adding a web
  * framework — the correctness lives in the engine services/RPCs, so the transport only
  * needs routing, JSON (de)serialization, a uniform error envelope, and auth/role gates.

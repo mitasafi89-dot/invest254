@@ -1,5 +1,5 @@
-import type { Cents } from "@printpesa/shared";
-import type { ChatRow } from "@printpesa/engine";
+import type { Cents } from "@invest254/shared";
+import type { ChatRow } from "@invest254/engine";
 import { Router, ApiError, requireAuth, requireRole, type Ctx } from "./http.js";
 import type { ApiDeps } from "./app.js";
 

@@ -1,7 +1,7 @@
 import {
   CurveGenerator, SettlementEngine, type GameConfig,
   dateKeyUTC, dayStartMs as dayStartMsForKey, deriveDaySeed, commitment,
-} from "@printpesa/shared";
+} from "@invest254/shared";
 import type { GameRepository } from "./wallet.js";
 
 /**

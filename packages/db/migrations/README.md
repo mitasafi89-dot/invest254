@@ -1,6 +1,6 @@
 # Database Migrations
 
-Idempotent, dependency-ordered SQL migrations for the PrintPesa Supabase Postgres.
+Idempotent, dependency-ordered SQL migrations for the Invest254 Supabase Postgres.
 
 ## Principles
 - **Parity:** the SQL in these files is exactly what was applied to the live database.

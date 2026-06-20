@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CURVE_AMPLITUDE, CURVE_BASE_RATE } from '@printpesa/shared/config';
+import { CURVE_AMPLITUDE, CURVE_BASE_RATE } from '@invest254/shared/config';
 import { useGameSocket } from '@/lib/game/GameSocketProvider';
 import { CurveCanvas } from '@/components/game/CurveCanvas';
 

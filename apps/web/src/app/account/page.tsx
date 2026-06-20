@@ -53,7 +53,7 @@ export default function AccountPage() {
           <h2 className="text-sm font-semibold tracking-tight">Responsible gaming</h2>
         </div>
         <p className="text-sm leading-relaxed text-muted">
-          PrintPesa is for entertainment and involves real money. Only stake what you can afford to
+          Invest254 is for entertainment and involves real money. Only stake what you can afford to
           lose, and take a break whenever you need one.
         </p>
         <div className="flex flex-col gap-2">

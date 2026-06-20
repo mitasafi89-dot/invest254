@@ -1,6 +1,6 @@
 import {
   CurveGenerator, SettlementEngine, type GameConfig, type Direction, type Outcome, type Tick,
-} from "@printpesa/shared";
+} from "@invest254/shared";
 import type { GameRepository } from "./wallet.js";
 
 export interface Position {

@@ -1,4 +1,4 @@
-import { sanitizeChat, MAX_CHAT_LEN } from "@printpesa/shared";
+import { sanitizeChat, MAX_CHAT_LEN } from "@invest254/shared";
 import type { EngagementRepository, ChatRow } from "./engagement.js";
 
 export type ChatPostResult =

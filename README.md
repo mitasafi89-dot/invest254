@@ -1,9 +1,9 @@
-# PrintPesa — Real-Money Trade-Prediction Game
+# Invest254 — Real-Money Trade-Prediction Game
 
 > A professional, real-money, crypto-themed **binary trade-prediction** game for the Kenyan market.
 > One shared live price curve, everyone bets BUY/SELL, win up to ×5.0.
 
-PrintPesa is a fully managed gaming platform comprising a player web app, an authoritative
+Invest254 is a fully managed gaming platform comprising a player web app, an authoritative
 real-time game engine, a wallet & M-Pesa payments layer, an affiliate/marketer program, and an
 administrative back office.
 
@@ -56,18 +56,18 @@ via `node --test` — no build step required for dev.
 
 | Workspace | Package | Responsibility |
 |-----------|---------|----------------|
-| `packages/shared` | `@printpesa/shared` | Pure, deterministic core: PRNG, curve, settlement, daily seed, money/payment helpers, chat filter, config/types |
+| `packages/shared` | `@invest254/shared` | Pure, deterministic core: PRNG, curve, settlement, daily seed, money/payment helpers, chat filter, config/types |
 | `packages/db` | — | SQL migrations `0001–0014`: schema, RLS, atomic money/seed/fairness/payment RPCs |
-| `apps/engine` | `@printpesa/engine` | Authoritative WebSocket game server + reusable services (game, daily-seed rotation, crash recovery, engagement, payments). Importable, side-effect-free barrel; the WS process starts via `npm -w @printpesa/engine start` |
-| `apps/api` | `@printpesa/api` | REST transport (Node `http`) binding the engine services per [docs/05](docs/05-api-reference.md): public game/fairness/activity, player wallet/chat/payments + history (ledger, positions, transactions), Daraja callbacks, finance-admin withdrawal moderation |
+| `apps/engine` | `@invest254/engine` | Authoritative WebSocket game server + reusable services (game, daily-seed rotation, crash recovery, engagement, payments). Importable, side-effect-free barrel; the WS process starts via `npm -w @invest254/engine start` |
+| `apps/api` | `@invest254/api` | REST transport (Node `http`) binding the engine services per [docs/05](docs/05-api-reference.md): public game/fairness/activity, player wallet/chat/payments + history (ledger, positions, transactions), Daraja callbacks, finance-admin withdrawal moderation |
 
 ```bash
 npm install                      # install workspaces
 npx tsc -b packages/shared apps/engine apps/api   # typecheck
 node --import tsx --test packages/**/*.test.ts apps/**/*.test.ts   # run all tests
 
-npm -w @printpesa/engine start   # WS engine   (PORT, MASTER_SEED, DATABASE_URL, SUPABASE_JWT_*)
-npm -w @printpesa/api start      # REST API     (PORT=8081, DATABASE_URL, SUPABASE_JWT_*, MPESA_*)
+npm -w @invest254/engine start   # WS engine   (PORT, MASTER_SEED, DATABASE_URL, SUPABASE_JWT_*)
+npm -w @invest254/api start      # REST API     (PORT=8081, DATABASE_URL, SUPABASE_JWT_*, MPESA_*)
 ```
 
 Without `DATABASE_URL` the engine runs fully in-memory for local dev; the API requires
@@ -76,6 +76,6 @@ never for production).
 
 ---
 
-> **Disclaimer:** PrintPesa is a real-money gambling product. Operation requires a valid gaming
+> **Disclaimer:** Invest254 is a real-money gambling product. Operation requires a valid gaming
 > licence and adherence to KYC/AML, responsible-gaming, tax (excise/withholding) and advertising
 > rules in every jurisdiction served. See [Security & Compliance](docs/14-security-compliance.md).

@@ -4,7 +4,7 @@ import { InMemoryIdentityRepository } from "./identity.js";
 import { AffiliateService } from "./affiliateservice.js";
 import { AuthService } from "./authservice.js";
 import { StubDarajaClient } from "./daraja.js";
-import { REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH } from "@printpesa/shared";
+import { REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH } from "@invest254/shared";
 
 const HASH = "scrypt$32768$8$1$abcdefghijklmnop$abcdefghijklmnop"; // length >= 20 (repo gate)
 const JWT = { jwtSecret: "test-secret-which-is-long-enough-123456", jwtTtlSeconds: 3600 };

@@ -19,7 +19,7 @@ import type {
   WalletDto,
   WithdrawalResult,
 } from '@/lib/api/types';
-import type { PositionStatus } from '@printpesa/shared';
+import type { PositionStatus } from '@invest254/shared';
 
 export interface RegisterInput {
   phone: string;

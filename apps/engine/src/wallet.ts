@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { type Cents, assertCents } from "@printpesa/shared";
-import type { Direction } from "@printpesa/shared";
+import { type Cents, assertCents } from "@invest254/shared";
+import type { Direction } from "@invest254/shared";
 import {
   type Page, type PageQuery, clampLimit, decodeCursor, decodeKeyset, pageFrom,
 } from "./paging.js";

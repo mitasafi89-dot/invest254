@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rtp, DEFAULT_CONFIG } from "@printpesa/shared";
+import { rtp, DEFAULT_CONFIG } from "@invest254/shared";
 import { startTestApi } from "./testutil.js";
 
 // node's fetch types `.json()` as `unknown`; tests assert on dynamic shapes.
@@ -139,14 +139,14 @@ test("OPTIONS preflight → 204 with CORS headers (browser write calls succeed)"
     const res = await fetch(`${api.baseUrl}/api/v1/auth/register`, {
       method: "OPTIONS",
       headers: {
-        Origin: "https://app.printpesa.example",
+        Origin: "https://app.invest254.example",
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "content-type, authorization",
       },
     });
     assert.equal(res.status, 204);
     // Default allowlist is "*": the request Origin is echoed back so the browser proceeds.
-    assert.equal(res.headers.get("access-control-allow-origin"), "https://app.printpesa.example");
+    assert.equal(res.headers.get("access-control-allow-origin"), "https://app.invest254.example");
     const allowMethods = res.headers.get("access-control-allow-methods") ?? "";
     assert.ok(allowMethods.includes("POST"), "POST must be allowed");
     const allowHeaders = (res.headers.get("access-control-allow-headers") ?? "").toLowerCase();
@@ -158,9 +158,9 @@ test("actual POST carries CORS header so the browser exposes the response", asyn
   const api = await startTestApi();
   try {
     const res = await fetch(`${api.baseUrl}/api/v1/health`, {
-      headers: { Origin: "https://app.printpesa.example" },
+      headers: { Origin: "https://app.invest254.example" },
     });
     assert.equal(res.status, 200);
-    assert.equal(res.headers.get("access-control-allow-origin"), "https://app.printpesa.example");
+    assert.equal(res.headers.get("access-control-allow-origin"), "https://app.invest254.example");
   } finally { await api.close(); }
 });

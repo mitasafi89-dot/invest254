@@ -79,7 +79,7 @@ web app) skipped**. Remaining: **M4 now (front-end, FE0–FE7 in doc 17) → M7 
 
 ### M4 update — trade-screen design replica (FE8)
 The player trade screen was reskinned to a supplied "High Trade"-style mobile
-reference (layout & visual only; branding stays **PrintPesa**). Chat was dropped
+reference (layout & visual only; branding stays **Invest254**). Chat was dropped
 from the trade view in favour of a single-line activity ticker, and a decorative
 asset ticker was added. Bug fixes: duplicate activity, missing BUY/SELL buttons,
 and live tick connectivity. Details: [17 — Frontend Build Plan](17-frontend-build-plan.md) §13 (FE8).

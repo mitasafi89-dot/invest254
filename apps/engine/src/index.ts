@@ -1,5 +1,5 @@
 /**
- * @printpesa/engine — public, side-effect-free barrel.
+ * @invest254/engine — public, side-effect-free barrel.
  *
  * Re-exports the reusable repositories, services and types so other apps (notably
  * apps/api, the HTTP transport) can compose them WITHOUT importing `server.ts`, which

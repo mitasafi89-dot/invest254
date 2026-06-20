@@ -45,7 +45,7 @@ test("activityMessage: formats KES and multiplier", () => {
   assert.match(activityMessage("withdrawal", "brian_254", 5_000_00), /CONGRATULATIONS @brian_254 on withdrawal of KES 5,000\.00/);
   assert.match(activityMessage("win", "njeri.ke", 1_250_00, 3.5), /@njeri\.ke just won KES 1,250\.00 on a ×3\.50 trade/);
   assert.match(activityMessage("bonus", "mrkamau", 100_00), /BONUS of KES 100\.00 issued to @mrkamau/);
-  assert.equal(activityMessage("signup", "joy_7", null), "@joy_7 just joined PrintPesa");
+  assert.equal(activityMessage("signup", "joy_7", null), "@joy_7 just joined Invest254");
 });
 
 test("simulateChat: deterministic, lines come from the pool", () => {

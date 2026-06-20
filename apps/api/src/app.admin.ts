@@ -1,5 +1,5 @@
 import { Router, ApiError, requireAuth, requireRole, type Ctx } from "./http.js";
-import type { PageQuery, AdminUserListQuery, AdminWithdrawalListQuery, AdminDepositListQuery, ReportRange, GameConfigPatch, MpesaConfigPatch, AdminPayoutListQuery, AdminUserActivityQuery } from "@printpesa/engine";
+import type { PageQuery, AdminUserListQuery, AdminWithdrawalListQuery, AdminDepositListQuery, ReportRange, GameConfigPatch, MpesaConfigPatch, AdminPayoutListQuery, AdminUserActivityQuery } from "@invest254/engine";
 import type { ApiDeps } from "./app.js";
 
 /**

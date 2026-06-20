@@ -1,8 +1,8 @@
 {
-  "name": "printpesa",
+  "name": "invest254",
   "private": true,
   "version": "0.1.0",
-  "description": "PrintPesa \u2014 authoritative real-money trade-prediction game engine (monorepo)",
+  "description": "Invest254 \u2014 authoritative real-money trade-prediction game engine (monorepo)",
   "type": "module",
   "workspaces": [
     "packages/*",

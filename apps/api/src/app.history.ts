@@ -1,4 +1,4 @@
-import type { LedgerEntry, PositionRecord, PositionDetail, TransactionRecord, FairnessRecord } from "@printpesa/engine";
+import type { LedgerEntry, PositionRecord, PositionDetail, TransactionRecord, FairnessRecord } from "@invest254/engine";
 import { Router, ApiError, requireAuth, type Ctx } from "./http.js";
 import type { ApiDeps } from "./app.js";
 

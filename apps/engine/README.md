@@ -1,6 +1,6 @@
-# @printpesa/engine — Authoritative Game Engine (prototype)
+# @invest254/engine — Authoritative Game Engine (prototype)
 
-Real-time, server-authoritative engine for the PrintPesa shared-curve game.
+Real-time, server-authoritative engine for the Invest254 shared-curve game.
 
 ## Run
 ```bash
@@ -13,7 +13,7 @@ npm test
 On boot the engine calibrates per-direction settlement (~3s) and serves WebSocket on `PORT`.
 
 ## What it does
-- **Shared smooth curve** (`@printpesa/shared` `CurveGenerator`): band-limited Fourier synthesis →
+- **Shared smooth curve** (`@invest254/shared` `CurveGenerator`): band-limited Fourier synthesis →
   C∞ smooth (no pointed peaks), deterministic from the daily server seed, green-dominant.
 - **Curve-determined settlement** (`SettlementEngine`): `win ⇔ direction's net move ≥ τ_dir`;
   multiplier scales with the move, capped ×5. `(τ, gain)` are calibrated **per direction** so

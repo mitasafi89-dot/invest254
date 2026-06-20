@@ -1,4 +1,4 @@
-import { normalizeMsisdn, MIN_DEPOSIT_CENTS, MIN_WITHDRAWAL_CENTS, type Cents } from "@printpesa/shared";
+import { normalizeMsisdn, MIN_DEPOSIT_CENTS, MIN_WITHDRAWAL_CENTS, type Cents } from "@invest254/shared";
 import type { PaymentRepository, CompleteResult, CreateWithdrawalResult } from "./payments.js";
 import type { DarajaClient } from "./daraja.js";
 
@@ -31,7 +31,7 @@ export class PaymentService {
     if (amountCents < this.minDeposit) throw new Error("BELOW_MIN");
     const msisdn = normalizeMsisdn(phoneRaw);
     const txId = await this.repo.createDeposit(userId, amountCents, msisdn);
-    const stk = await this.daraja.stkPush({ amountCents, msisdn, accountRef: "PrintPesa", desc: "Deposit" });
+    const stk = await this.daraja.stkPush({ amountCents, msisdn, accountRef: "Invest254", desc: "Deposit" });
     await this.repo.attachStk(txId, stk.merchantRequestId, stk.checkoutRequestId);
     return { txId, checkoutRequestId: stk.checkoutRequestId };
   }

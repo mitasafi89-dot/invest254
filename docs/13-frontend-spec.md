@@ -13,7 +13,7 @@ Stack: Next.js 14 + TypeScript + Tailwind. Dark theme matching the screenshot (n
 green/red curve, cyan accents).
 
 ## 1. Layout (desktop, matches screenshot)
-- **Top bar:** logo "PrintPesa", headline `BTC/KES` rate + 24H high/low + online count, Login/Sign Up,
+- **Top bar:** logo "Invest254", headline `BTC/KES` rate + 24H high/low + online count, Login/Sign Up,
   theme toggle.
 - **Ticker strip:** decorative crypto list (ETH, BNB, SOL, …) — display-only.
 - **Left rail:** Live Activity feed + chat input.
@@ -66,7 +66,7 @@ dashboard · `/r/:code` referral landing · auth modals overlaid.
 The canonical player trade screen follows the supplied mobile reference. The single
 `/` screen, top → bottom:
 
-1. **Top bar** — indigo "P" brand mark + PrintPesa wordmark; `Login` (outline) +
+1. **Top bar** — indigo "P" brand mark + Invest254 wordmark; `Login` (outline) +
    `Sign Up` (brand); balance pill.
 2. **Price header** — `BTC/KES` signed curve value + % pill (value×100); 24H
    high/low (window extremes); live online count. (Synthetic curve value, not a
@@ -80,5 +80,5 @@ The canonical player trade screen follows the supplied mobile reference. The sin
    idle Live P&L, always-visible BUY/SELL.
 8. **Bottom nav** — TRADE / DEPOSIT / HISTORY / PROFILE.
 
-Branding remains **PrintPesa**. Palette and component breakdown:
+Branding remains **Invest254**. Palette and component breakdown:
 [17 — Frontend Build Plan](17-frontend-build-plan.md) §13.

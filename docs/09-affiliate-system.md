@@ -5,7 +5,7 @@ Marketers are players who also **refer others and earn 20% revenue-share**. They
 ## 1. Becoming a marketer ✅ (I1)
 - Any player calls `POST /affiliate/enroll` → creates an `affiliates` row with a unique
   `referral_code` (and `commission_rate = 0.20`) and sets `profiles.role = 'marketer'`.
-- They get a shareable link: `https://printpesa.../r/<referral_code>`.
+- They get a shareable link: `https://invest254.../r/<referral_code>`.
 - **Implemented (I1):** enrollment is **idempotent** — repeat calls return the existing stable
   code and never re-mint or downgrade a privileged role. The code uses a Crockford-style
   alphabet (no `0/O/1/I/L`). Logic lives in the `fn_affiliate_enroll` RPC (service-role only,

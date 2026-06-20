@@ -1,4 +1,4 @@
-import type { ActivityKind } from '@printpesa/shared';
+import type { ActivityKind } from '@invest254/shared';
 
 /**
  * WebSocket engagement contract (FE5) — mirrors the engine DTOs in

@@ -1,5 +1,5 @@
 {
-  "name": "@printpesa/api",
+  "name": "@invest254/api",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -11,8 +11,8 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
-    "@printpesa/shared": "0.1.0",
-    "@printpesa/engine": "0.1.0",
+    "@invest254/shared": "0.1.0",
+    "@invest254/engine": "0.1.0",
     "pg": "^8.12.0"
   }
 }

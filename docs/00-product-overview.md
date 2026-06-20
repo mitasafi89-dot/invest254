@@ -1,7 +1,7 @@
 # 00 — Product Overview
 
 ## 1. Vision
-PrintPesa is a fast, social, real-money prediction game. A single live price curve (styled as
+Invest254 is a fast, social, real-money prediction game. A single live price curve (styled as
 `BTC/KES`) streams to all players simultaneously. Players stake KES and predict whether the rate
 will go **UP (BUY)** or **DOWN (SELL)** over a short trade window, cashing out for up to **×5.0**.
 The experience blends the look of a trading terminal with the pace and social proof of a casino

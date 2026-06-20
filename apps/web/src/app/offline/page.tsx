@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-export const metadata = { title: 'Offline — PrintPesa' };
+export const metadata = { title: 'Offline — Invest254' };
 
 // Served by the service worker when a navigation fails with no network.
 export default function OfflinePage() {
@@ -11,7 +11,7 @@ export default function OfflinePage() {
       </div>
       <h1 className="text-xl font-semibold tracking-tight">You&apos;re offline</h1>
       <p className="max-w-sm text-sm text-muted">
-        PrintPesa needs a connection for live prices, your wallet and trading. Reconnect and try
+        Invest254 needs a connection for live prices, your wallet and trading. Reconnect and try
         again — the curve and your balance always come straight from the server.
       </p>
       <Link

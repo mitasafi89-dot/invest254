@@ -1,5 +1,5 @@
 import { randomUUID, randomInt } from "node:crypto";
-import { REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH } from "@printpesa/shared";
+import { REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH } from "@invest254/shared";
 import type { Querier } from "./wallet.js";
 import { type Page, type PageQuery, clampLimit, decodeKeyset, pageFrom } from "./paging.js";
 

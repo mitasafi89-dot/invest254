@@ -1,5 +1,5 @@
 import { WebSocketServer, type WebSocket } from "ws";
-import { DEFAULT_CONFIG, type Direction } from "@printpesa/shared";
+import { DEFAULT_CONFIG, type Direction } from "@invest254/shared";
 import { InMemoryGameRepository, PgGameRepository, type GameRepository, type Querier } from "./wallet.js";
 import { InMemoryEngagementRepository, PgEngagementRepository, maskHandle, type EngagementRepository, type ActivityRow, type ChatRow } from "./engagement.js";
 import { GameServer } from "./game.js";

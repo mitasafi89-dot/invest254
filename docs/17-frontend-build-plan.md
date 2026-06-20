@@ -47,7 +47,7 @@ layout is built and verified first, then progressively enhanced for tablet/deskt
 |---|---|---|
 | Framework | **Next.js 14 (App Router) + TypeScript** | Matches docs 01/13; SSR for marketing/referral routes, CSR for the game. |
 | Styling | **Tailwind CSS** + CSS variables for theme tokens | Matches spec; fast, consistent, dark-first. |
-| Workspace | New npm workspace **`apps/web`**; consumes **`@printpesa/shared`** for types/money/config | Single source of truth for money math, config shape, and event/DTO types. |
+| Workspace | New npm workspace **`apps/web`**; consumes **`@invest254/shared`** for types/money/config | Single source of truth for money math, config shape, and event/DTO types. |
 | Server state | **TanStack Query (React Query)** | Cursor pagination, caching, retries, invalidation for REST. |
 | Client/UI state | **Zustand** (auth/session, socket store, bet-panel draft) | Minimal, hook-friendly, no boilerplate. |
 | Realtime | Native **WebSocket** wrapped in `useGameSocket()` | Authoritative engine per doc 03; no extra lib needed. |
@@ -162,11 +162,11 @@ action-oriented UI messages.
 **Goal:** an `apps/web` Next.js app that builds, typechecks, and renders an empty responsive shell.
 **Scope/deliverables:** workspace + Next 14 App Router + TS + Tailwind; design tokens & theme
 (dark-first); base UI components (`Button`, `Input`, `Money`, `Sheet`, `Tabs`, `Toast`, `Skeleton`,
-`EmptyState`, `ErrorState`); typed REST client skeleton + error envelope; `@printpesa/shared`
+`EmptyState`, `ErrorState`); typed REST client skeleton + error envelope; `@invest254/shared`
 wired in; env config; app shell (top bar + bottom nav on mobile) + routing stubs for all routes;
 CI typecheck.
 **Depends on:** none.
-**Acceptance:** `npm -w @printpesa/web build` + `tsc -b` pass; shell renders correctly at 360px and
+**Acceptance:** `npm -w @invest254/web build` + `tsc -b` pass; shell renders correctly at 360px and
 desktop; theme toggle works; lint/typecheck green on `main`.
 
 ### FE1 — Auth & onboarding (phone + password)
@@ -280,10 +280,10 @@ docs 13/16 updated if the phase changed a contract assumption.
 
 ---
 
-## 13. FE8 — Trade-screen design replica (PrintPesa skin)
+## 13. FE8 — Trade-screen design replica (Invest254 skin)
 
 > Added after a mobile design reference (a "High Trade"-style trade screen) was
-> supplied. Branding stays **PrintPesa**; only the *layout & visual system* are
+> supplied. Branding stays **Invest254**; only the *layout & visual system* are
 > replicated. Runtime target: local dev (engine + api + web together).
 
 **Goal:** the `/` trade screen matches the reference — one mobile-first screen with
@@ -297,7 +297,7 @@ bonus-yellow `#E3B341`. Tokens live in `globals.css`; Tailwind exposes `brand` a
 `warn` alongside the existing colours.
 
 **Deliverables**
-- `TopBar`: indigo "P" mark + PrintPesa wordmark; `Login` (outline) + `Sign Up`
+- `TopBar`: indigo "P" mark + Invest254 wordmark; `Login` (outline) + `Sign Up`
   (brand) buttons; balance pill.
 - `PriceHeader`: `BTC/KES` signed curve value + % pill (value×100), 24H high/low
   (window extremes) and live online count. The number is the synthetic curve
@@ -324,8 +324,8 @@ bonus-yellow `#E3B341`. Tokens live in `globals.css`; Tailwind exposes `brand` a
    login / age gate; they are now always rendered (gating moves to the tap).
 3. *No tick data* — the curve & price stream only when the **engine (WS)** is
    reachable and the **API** serves `/game/config`. Run all three locally:
-   `npm -w @printpesa/engine start` · `npm -w @printpesa/api start` ·
-   `npm -w @printpesa/web dev`, with `NEXT_PUBLIC_WS_URL=ws://localhost:8080` and
+   `npm -w @invest254/engine start` · `npm -w @invest254/api start` ·
+   `npm -w @invest254/web dev`, with `NEXT_PUBLIC_WS_URL=ws://localhost:8080` and
    `NEXT_PUBLIC_API_BASE_URL=http://localhost:8081/api/v1`.
 
 **Acceptance:** the ≤411px screen matches the reference; typecheck + prod build

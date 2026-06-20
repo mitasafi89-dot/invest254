@@ -25,7 +25,7 @@ export default function ReferralLandingPage({ params }: { params: { code: string
         P
       </div>
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">You&apos;re invited to PrintPesa</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">You&apos;re invited to Invest254</h1>
         <p className="text-sm leading-relaxed text-muted">
           Predict BUY/SELL on the live BTC/KES curve and win in real Kenyan Shillings. Sign up with
           this invite to get started.

@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, type Cents } from "@printpesa/shared";
+import { DEFAULT_CONFIG, type Cents } from "@invest254/shared";
 import type { Querier } from "./wallet.js";
 import { type Page, type PageQuery, clampLimit, decodeKeyset, pageFrom } from "./paging.js";
 import type { InMemoryIdentityRepository } from "./identity.js";

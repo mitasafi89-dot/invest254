@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Legal & Responsible Gaming — PrintPesa',
-  description: 'PrintPesa licence, terms of service, responsible gaming commitment and privacy.',
+  title: 'Legal & Responsible Gaming — Invest254',
+  description: 'Invest254 licence, terms of service, responsible gaming commitment and privacy.',
 };
 
 const sections = [
@@ -46,7 +46,7 @@ export default function LegalPage() {
         <div className="flex min-w-0 flex-1 flex-col gap-8">
           <Section id="responsible-gaming" title="Responsible Gaming">
             <p>
-              PrintPesa is a real-money trade-prediction game. It is entertainment, not an income
+              Invest254 is a real-money trade-prediction game. It is entertainment, not an income
               source or an investment. Prices move both ways and you can lose your entire stake on
               any trade.
             </p>
@@ -71,8 +71,8 @@ export default function LegalPage() {
             <H3>Cool-off &amp; self-exclusion</H3>
             <p>
               To pause your account, email{' '}
-              <a className="text-accent hover:underline" href="mailto:support@printpesa.co.ke">
-                support@printpesa.co.ke
+              <a className="text-accent hover:underline" href="mailto:support@invest254.co.ke">
+                support@invest254.co.ke
               </a>{' '}
               with the subject <strong>“Self-exclusion”</strong> and your registered phone number.
               We will lock deposits and trading for the period you request (or permanently). Pending
@@ -92,7 +92,7 @@ export default function LegalPage() {
           <Section id="terms" title="Terms of Service">
             <p>
               By creating an account you agree to these terms. If you do not agree, do not use
-              PrintPesa.
+              Invest254.
             </p>
             <Ul
               items={[
@@ -118,14 +118,14 @@ export default function LegalPage() {
                 'How we use it: to operate the game, process M-Pesa deposits and withdrawals, prevent fraud, and meet legal obligations.',
                 'Sharing: with payment and infrastructure providers strictly to deliver the service, and with authorities where the law requires.',
                 'Security: passwords are hashed; money records are stored on an immutable ledger; access is restricted and audited.',
-                'Your rights: request a copy of your data or account deletion by emailing support@printpesa.co.ke (subject to legal retention rules).',
+                'Your rights: request a copy of your data or account deletion by emailing support@invest254.co.ke (subject to legal retention rules).',
               ]}
             />
           </Section>
 
           <Section id="licence" title="About &amp; Licence">
             <p>
-              PrintPesa is a real-money trade-prediction game built for the Kenyan market. Play is
+              Invest254 is a real-money trade-prediction game built for the Kenyan market. Play is
               in Kenyan Shillings (KES) and deposits/withdrawals run over M-Pesa.
             </p>
             <p>
@@ -134,9 +134,9 @@ export default function LegalPage() {
               published here and must be displayed before commercial launch.
             </p>
             <p className="text-muted">
-              Operator: PrintPesa Ltd · Licence no.: to be confirmed · Support:{' '}
-              <a className="text-accent hover:underline" href="mailto:support@printpesa.co.ke">
-                support@printpesa.co.ke
+              Operator: Invest254 Ltd · Licence no.: to be confirmed · Support:{' '}
+              <a className="text-accent hover:underline" href="mailto:support@invest254.co.ke">
+                support@invest254.co.ke
               </a>
             </p>
           </Section>

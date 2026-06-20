@@ -1,4 +1,4 @@
-import { dateKeyUTC } from "@printpesa/shared";
+import { dateKeyUTC } from "@invest254/shared";
 import type { GameRepository } from "./wallet.js";
 import type { SeedManager } from "./daycontext.js";
 import type { GameServer, Position } from "./game.js";

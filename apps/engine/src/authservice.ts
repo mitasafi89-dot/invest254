@@ -1,6 +1,6 @@
 import { randomBytes, scrypt as _scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
 import { SignJWT } from "jose";
-import { validatePassword, validateUsername, validateReferralCode, normalizeMsisdn } from "@printpesa/shared";
+import { validatePassword, validateUsername, validateReferralCode, normalizeMsisdn } from "@invest254/shared";
 import type { IdentityRepository } from "./identity.js";
 
 /**

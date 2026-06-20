@@ -9,7 +9,7 @@
 
 ## 2. Repository layout (monorepo)
 ```
-printpesa/
+invest254/
 ├─ docs/                  # this documentation
 ├─ apps/
 │  ├─ web/                # Next.js player app

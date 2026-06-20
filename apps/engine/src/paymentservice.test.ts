@@ -83,7 +83,7 @@ test("HttpDarajaClient: builds STK Push + B2C requests with token, KES amounts, 
   }) as unknown as typeof fetch;
   const cfg = { env: "sandbox", consumerKey: "k", consumerSecret: "s", shortcode: "174379", passkey: "pk", stkCallbackUrl: "https://cb", b2cInitiator: "init", b2cSecurityCredential: "sec", b2cResultUrl: "https://r", b2cTimeoutUrl: "https://t" } as const;
   const c = new HttpDarajaClient(cfg, fakeFetch);
-  const stk = await c.stkPush({ amountCents: 5_000, msisdn: "254712345678", accountRef: "PrintPesa", desc: "Deposit" });
+  const stk = await c.stkPush({ amountCents: 5_000, msisdn: "254712345678", accountRef: "Invest254", desc: "Deposit" });
   assert.deepEqual(stk, { merchantRequestId: "MR1", checkoutRequestId: "CO1" });
   const stkReq = reqs.find((r) => r.url.includes("stkpush"))!;
   assert.equal(stkReq.body.Amount, 50); // 5000 cents -> KES 50

@@ -1,6 +1,6 @@
 'use client';
 
-import { formatKes } from '@printpesa/shared/money';
+import { formatKes } from '@invest254/shared/money';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';

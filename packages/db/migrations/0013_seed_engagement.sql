@@ -47,7 +47,7 @@ begin
         mult := 1.10 + ((('x'||substr(md5(i::text||'mult'),1,7))::bit(28)::int % 391) / 100.0);                     -- ×1.10–×5.00
         msg := '@'||uname||' just won KES '||to_char(amt/100.0,'FM999,999,990.00')||' on a ×'||to_char(mult,'FM990.00')||' trade';
       elsif k = 'bonus'      then msg := 'BONUS of KES '||to_char(amt/100.0,'FM999,999,990.00')||' issued to @'||uname;
-      else                        msg := '@'||uname||' just joined PrintPesa';
+      else                        msg := '@'||uname||' just joined Invest254';
       end if;
       insert into public.activity_feed(kind, username, amount, is_simulated, message, created_at)
         values (k, uname, amt, true, msg, ts);

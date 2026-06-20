@@ -46,7 +46,7 @@ function safeJson(text: string): unknown {
 }
 
 /**
- * Typed fetch against the PrintPesa REST API. Injects the bearer token,
+ * Typed fetch against the Invest254 REST API. Injects the bearer token,
  * serialises JSON, and normalises the error envelope into an ApiError.
  */
 export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Promise<T> {

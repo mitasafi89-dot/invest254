@@ -1,10 +1,10 @@
 import type { AddressInfo } from "node:net";
-import { DEFAULT_CONFIG, type Cents } from "@printpesa/shared";
+import { DEFAULT_CONFIG, type Cents } from "@invest254/shared";
 import {
   InMemoryEngagementRepository, InMemoryPaymentRepository, InMemoryGameRepository, StubDarajaClient,
   InMemoryIdentityRepository, PaymentService, ChatService, ActivityService, AuthService, AffiliateService, AdminService, InMemoryAdminRepository, maskHandle,
   type FairnessRecord, type AuthClaims, type Verifier,
-} from "@printpesa/engine";
+} from "@invest254/engine";
 import { createApp, type ApiDeps, type WalletBalance } from "./app.js";
 
 /**
@@ -46,7 +46,7 @@ export interface TestApiOptions { startingBalanceCents?: Cents; depsOverrides?: 
 
 export async function startTestApi(opts: TestApiOptions = {}): Promise<TestApi> {
   const engage = new InMemoryEngagementRepository();
-  await engage.insertActivity({ kind: "signup", username: "newbie", amountCents: null, isSimulated: false, message: "@newbie just joined PrintPesa" });
+  await engage.insertActivity({ kind: "signup", username: "newbie", amountCents: null, isSimulated: false, message: "@newbie just joined Invest254" });
   await engage.insertActivity({ kind: "win", username: "wanj***", amountCents: 500_000, isSimulated: false, message: "@wanj*** just won KES 5,000.00 on a ×3.50 trade" });
   engage.setUsername(TEST_USER, "tester");
 

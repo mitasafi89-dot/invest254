@@ -19,6 +19,6 @@ jobs:
       - name: Typecheck (shared / engine / api)
         run: npx tsc -b packages/shared apps/engine apps/api
       - name: Build web (includes type checking)
-        run: npm -w @printpesa/web run build
+        run: npm -w @invest254/web run build
       - name: Test
         run: npm test

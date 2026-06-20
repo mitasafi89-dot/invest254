@@ -1,10 +1,10 @@
-import { DEFAULT_CONFIG } from "@printpesa/shared";
+import { DEFAULT_CONFIG } from "@invest254/shared";
 import {
   PgGameRepository, PgEngagementRepository, PgPaymentRepository, PgIdentityRepository,
   PaymentService, ChatService, ActivityService, AuthService, AffiliateService, AdminService, PgAdminRepository, makeDarajaClientFromConfig, loadDarajaConfigFromDb, makeVerifier, maskHandle,
   type GameRepository, type EngagementRepository, type PaymentRepository,
   type Querier, type FairnessRecord,
-} from "@printpesa/engine";
+} from "@invest254/engine";
 import { createApp, type ApiDeps, type WalletBalance } from "./app.js";
 
 /**

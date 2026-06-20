@@ -9,8 +9,8 @@ import {
   useState,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { formatKes } from '@printpesa/shared/money';
-import { CURVE_AMPLITUDE, CURVE_BASE_RATE } from '@printpesa/shared/config';
+import { formatKes } from '@invest254/shared/money';
+import { CURVE_AMPLITUDE, CURVE_BASE_RATE } from '@invest254/shared/config';
 import { env } from '@/lib/env';
 import { useSession } from '@/lib/auth/session';
 import { useToast } from '@/lib/toast/ToastProvider';

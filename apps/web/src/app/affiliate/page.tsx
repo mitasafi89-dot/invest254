@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Money } from '@/components/ui/Money';
 import { ApiError } from '@/lib/api/client';
 import type { AffiliateSummary, CommissionRecord } from '@/lib/api/types';
-import { formatKes } from '@printpesa/shared/money';
+import { formatKes } from '@invest254/shared/money';
 import { useSession } from '@/lib/auth/session';
 import { useAuthUi } from '@/lib/auth/ui';
 import { useAuthActions } from '@/lib/auth/useAuthActions';
@@ -42,7 +42,7 @@ export default function AffiliatePage() {
   if (!token) {
     return (
       <EmptyState
-        title="Earn with PrintPesa"
+        title="Earn with Invest254"
         description="Log in to apply for the affiliate programme and earn 20% revenue share from players you refer."
         action={<Button onClick={() => openAuth('login')}>Log in</Button>}
       />
@@ -100,7 +100,7 @@ function ApplyCard() {
         <h2 className="text-base font-semibold">Join the affiliate programme</h2>
         <p className="text-sm leading-relaxed text-muted">
           Get a personal referral link and earn <strong className="text-fg">20%</strong> of the net
-          revenue from every player you bring to PrintPesa — accrued daily, paid to your M-Pesa. You
+          revenue from every player you bring to Invest254 — accrued daily, paid to your M-Pesa. You
           keep your full player account and can carry on trading as normal.
         </p>
       </div>
@@ -110,7 +110,7 @@ function ApplyCard() {
         <Perk title="M-Pesa payouts" body="Request anytime you have a balance." />
       </div>
       <div className="rounded-xl border border-border bg-surface-2 p-3 text-xs leading-relaxed text-muted">
-        Applications are reviewed before approval. By applying you agree to promote PrintPesa
+        Applications are reviewed before approval. By applying you agree to promote Invest254
         responsibly and lawfully — 18+ audiences only, no misleading or non-compliant gambling ads,
         and no self-referrals. See{' '}
         <a href="/legal#terms" className="text-accent hover:underline">
@@ -158,8 +158,8 @@ function StatusCard({ status }: { status: string }) {
       title={status === 'rejected' ? 'Application not approved' : 'Account paused'}
       description={
         status === 'rejected'
-          ? 'Your affiliate application was not approved. Contact support@printpesa.co.ke if you believe this is a mistake.'
-          : 'Your affiliate account is currently paused. Contact support@printpesa.co.ke to restore it.'
+          ? 'Your affiliate application was not approved. Contact support@invest254.co.ke if you believe this is a mistake.'
+          : 'Your affiliate account is currently paused. Contact support@invest254.co.ke to restore it.'
       }
     />
   );

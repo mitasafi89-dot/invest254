@@ -1,4 +1,4 @@
-import type { Tick } from '@printpesa/shared/types';
+import type { Tick } from '@invest254/shared/types';
 
 export type { Tick };
 

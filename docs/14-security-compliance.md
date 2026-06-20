@@ -1,6 +1,6 @@
 # 14 — Security & Compliance
 
-> PrintPesa handles real money and is a gambling product. This section is guidance, **not legal
+> Invest254 handles real money and is a gambling product. This section is guidance, **not legal
 > advice** — operate under your licence and your lawyer's direction.
 
 ## 1. Regulatory (Kenya-focused)

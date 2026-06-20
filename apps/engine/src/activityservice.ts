@@ -1,4 +1,4 @@
-import { SeededRng, simulateActivity, activityMessage, type ActivityKind, type Cents } from "@printpesa/shared";
+import { SeededRng, simulateActivity, activityMessage, type ActivityKind, type Cents } from "@invest254/shared";
 import type { EngagementRepository, ActivityRow } from "./engagement.js";
 
 export interface ActivityOptions {

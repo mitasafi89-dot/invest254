@@ -1,4 +1,4 @@
-/* PrintPesa service worker — offline shell + safe runtime caching.
+/* Invest254 service worker — offline shell + safe runtime caching.
  * Strategy:
  *   - Precache a minimal offline shell.
  *   - Navigations: network-first, fall back to the cached offline shell when the

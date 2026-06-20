@@ -1,5 +1,5 @@
-import { type Cents } from "@printpesa/shared";
-import type { ActivityKind } from "@printpesa/shared";
+import { type Cents } from "@invest254/shared";
+import type { ActivityKind } from "@invest254/shared";
 import type { Querier } from "./wallet.js";
 
 /**

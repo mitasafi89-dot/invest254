@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { ActivityKind } from '@printpesa/shared';
+import type { ActivityKind } from '@invest254/shared';
 import { api } from '@/lib/api/endpoints';
 import { cn } from '@/lib/cn';
 import { useSession } from '@/lib/auth/session';

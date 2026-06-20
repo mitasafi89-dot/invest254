@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { kesToCents, centsToKes, formatKes } from '@printpesa/shared/money';
-import { normalizeMsisdn, MIN_WITHDRAWAL_CENTS } from '@printpesa/shared/payments';
+import { kesToCents, centsToKes, formatKes } from '@invest254/shared/money';
+import { normalizeMsisdn, MIN_WITHDRAWAL_CENTS } from '@invest254/shared/payments';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useWithdraw, useWallet } from '@/lib/wallet/hooks';

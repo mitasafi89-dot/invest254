@@ -1,4 +1,4 @@
-import type { Direction } from '@printpesa/shared';
+import type { Direction } from '@invest254/shared';
 
 /**
  * WebSocket betting contract — mirrors the engine source of truth

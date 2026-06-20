@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Direction } from '@printpesa/shared';
+import type { Direction } from '@invest254/shared';
 
 export type WalletMode = 'deposit' | 'withdraw';
 

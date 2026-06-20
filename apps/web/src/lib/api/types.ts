@@ -1,4 +1,4 @@
-import type { ActivityKind, Cents, Direction, PositionStatus, PositionResult } from '@printpesa/shared';
+import type { ActivityKind, Cents, Direction, PositionStatus, PositionResult } from '@invest254/shared';
 
 /** Cursor-paginated list envelope (docs/05 §8). */
 export interface Paginated<T> {

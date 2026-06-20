@@ -39,7 +39,7 @@ export function Footer() {
         </nav>
 
         <p className="text-[11px] text-muted">
-          © {year} PrintPesa. Self-control is the best game plan.
+          © {year} Invest254. Self-control is the best game plan.
         </p>
       </div>
     </footer>

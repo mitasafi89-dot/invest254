@@ -18,10 +18,10 @@ MPESA_CONSUMER_KEY=...
 MPESA_CONSUMER_SECRET=...
 MPESA_SHORTCODE=...            # Paybill / business shortcode
 MPESA_PASSKEY=...              # STK push passkey
-MPESA_STK_CALLBACK_URL=https://api.printpesa.../api/v1/deposits/mpesa/callback
+MPESA_STK_CALLBACK_URL=https://api.invest254.../api/v1/deposits/mpesa/callback
 MPESA_B2C_INITIATOR=...        # for withdrawals
 MPESA_B2C_SECURITY_CREDENTIAL=...
-MPESA_B2C_RESULT_URL=https://api.printpesa.../api/v1/withdrawals/mpesa/result
+MPESA_B2C_RESULT_URL=https://api.invest254.../api/v1/withdrawals/mpesa/result
 MPESA_B2C_TIMEOUT_URL=...
 ```
 Access token is fetched from `/oauth/v1/generate?grant_type=client_credentials` and cached ~55 min.
@@ -33,7 +33,7 @@ Access token is fetched from `/oauth/v1/generate?grant_type=client_credentials` 
 3. API → Daraja POST /mpesa/stkpush/v1/processrequest
      { BusinessShortCode, Password=base64(shortcode+passkey+timestamp), Timestamp,
        TransactionType=CustomerPayBillOnline, Amount, PartyA=phone, PartyB=shortcode,
-       PhoneNumber=phone, CallBackURL, AccountReference='PrintPesa', TransactionDesc='Deposit' }
+       PhoneNumber=phone, CallBackURL, AccountReference='Invest254', TransactionDesc='Deposit' }
 4. Daraja returns CheckoutRequestID → store on transaction; player gets STK prompt on phone
 5. Player enters M-Pesa PIN
 6. Daraja → POST /deposits/mpesa/callback with ResultCode
