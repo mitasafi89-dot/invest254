@@ -90,7 +90,7 @@ export function Feed() {
 
       <div
         ref={scrollRef}
-        className="flex max-h-56 min-h-[8rem] flex-col gap-1.5 overflow-y-auto px-3 py-2"
+        className="flex max-h-44 min-h-[6rem] flex-col gap-1.5 overflow-y-auto px-3 py-2"
         aria-live="polite"
         aria-label="Live activity and chat"
       >

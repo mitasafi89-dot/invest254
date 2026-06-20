@@ -74,14 +74,15 @@ const Ctx = createContext<GameSocketValue | null>(null);
 const SYNTH_SPACING_MS = 150;
 const SYNTH_SPAN_MS = 60_000;
 
-/** Smooth, lively synthetic curve value ∈ (-0.88, 0.88) to keep the canvas full pre-data. */
+/** Smooth synthetic curve, biased upward so ~75% sits above 0 (green) — matches server feel. */
 function synthValue(t: number): number {
   const s = t / 1000;
   const v =
-    0.45 * Math.sin(s * 1.7) +
-    0.28 * Math.sin(s * 0.9 + 1.3) +
-    0.18 * Math.sin(s * 3.1 + 0.5);
-  return Math.max(-0.88, Math.min(0.88, v));
+    0.40 * Math.sin(s * 1.7) +
+    0.25 * Math.sin(s * 0.9 + 1.3) +
+    0.16 * Math.sin(s * 3.1 + 0.5) +
+    0.28;
+  return Math.max(-0.92, Math.min(0.92, v));
 }
 
 function isTick(v: unknown): v is Tick {

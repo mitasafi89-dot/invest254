@@ -10,7 +10,7 @@ const WINDOW_MS = 60_000;
 const toValue = (rate: number) => (rate - CURVE_BASE_RATE) / CURVE_AMPLITUDE;
 
 export function GameCurve() {
-  const { getTicks, getLastTick, fairness } = useGameSocket();
+  const { getTicks, getLastTick } = useGameSocket();
 
   // Keep the live "Rate:" readout ticking without re-rendering the canvas loop.
   const [, force] = useState(0);
@@ -19,7 +19,6 @@ export function GameCurve() {
     return () => clearInterval(id);
   }, []);
 
-  const seedShort = fairness ? `${fairness.serverSeedHash.slice(0, 10)}…` : null;
   const last = getLastTick();
   const rateLabel = last ? toValue(last.rate).toFixed(4) : '—';
 
@@ -34,13 +33,6 @@ export function GameCurve() {
       <div className="relative h-60 w-full overflow-hidden rounded-xl bg-surface sm:h-80">
         <CurveCanvas getTicks={getTicks} getLastTick={getLastTick} windowMs={WINDOW_MS} />
       </div>
-
-      {seedShort ? (
-        <p className="text-center text-[11px] text-muted">
-          Provably fair · seed {seedShort}
-          {fairness?.tradeDate ? ` · ${fairness.tradeDate}` : ''}
-        </p>
-      ) : null}
     </div>
   );
 }

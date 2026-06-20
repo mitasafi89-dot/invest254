@@ -19,10 +19,15 @@ export function AuthButtons() {
   if (!hydrated || !token) {
     return (
       <>
-        <Button variant="outline" size="sm" onClick={() => openAuth('login')}>
+        <Button variant="ghost" size="sm" onClick={() => openAuth('login')}>
           Login
         </Button>
-        <Button variant="brand" size="sm" onClick={() => openAuth('register')}>
+        <Button
+          variant="primary"
+          size="sm"
+          className="font-semibold shadow-md shadow-accent/40"
+          onClick={() => openAuth('register')}
+        >
           Sign Up
         </Button>
       </>
