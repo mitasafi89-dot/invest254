@@ -17,11 +17,13 @@ begin
   if p_amount = 0 then raise exception 'INVALID_AMOUNT'; end if;
   if p_reason is null or btrim(p_reason) = '' then raise exception 'REASON_REQUIRED'; end if;
   -- atomic: lock the wallet, verify the debit does not overdraw, mutate, audit + ledger in one txn.
-  select real_balance into v_bal from wallets where user_id = p_target for update;
+  -- Qualify wallets.user_id: the RETURNS TABLE out-column `user_id` would otherwise
+  -- collide with the column, raising "column reference \"user_id\" is ambiguous".
+  select w.real_balance into v_bal from wallets w where w.user_id = p_target for update;
   if not found then raise exception 'WALLET_NOT_FOUND'; end if;
   if v_bal + p_amount < 0 then raise exception 'INSUFFICIENT_FUNDS'; end if;
-  update wallets set real_balance = real_balance + p_amount where user_id = p_target
-    returning real_balance into v_new;
+  update wallets set real_balance = wallets.real_balance + p_amount where wallets.user_id = p_target
+    returning wallets.real_balance into v_new;
   insert into admin_actions(actor_id, actor_role, action, target_type, target_id, detail)
     values (p_actor, p_actor_role, 'balance.adjust', 'user', p_target::text,
             jsonb_build_object('amount', p_amount, 'reason', p_reason, 'before', v_bal, 'after', v_new))
