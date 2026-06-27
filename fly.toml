@@ -1,0 +1,65 @@
+# Fly.io configuration for Invest254 backend
+# Deploy with: fly deploy
+
+app = "invest254-backend"
+primary_region = "iad"  # US East (closest to Kenya, adjust as needed)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Set these in Fly.io dashboard or via: fly secrets set KEY=value
+  NODE_ENV = "production"
+  PORT = "8081"  # API port
+  WS_PORT = "8080"  # Engine port
+
+[http_service]
+  internal_port = 8081
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 800
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 8080
+    handlers = ["http"]
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 5000
+    soft_limit = 4000
+
+[checks]
+  [checks.alive]
+    type = "http"
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    port = 8081
+
+[[vm]]
+  memory = "512mb"
+  cpus = 1
+  cpu_kind = "shared"
+
+# Scaling
+[processes]
+  app = "sh -c 'npm -w @invest254/engine start & npm -w @invest254/api start & wait'"
+
+# Volumes (optional, for persistent data)
+# [[mounts]]
+#   source = "invest254_data"
+#   destination = "/app/data"
