@@ -7,7 +7,7 @@
 # For a cleaner two-app split (independent scaling) use the CLI instead:
 #   fly deploy -c fly.engine.toml   and   fly deploy -c fly.api.toml
 
-app            = "invest254-backend"   # change in the Fly UI if this name is taken
+app            = "invest254"           # matches the app created in your Fly dashboard
 primary_region = "jnb"                 # Johannesburg — Fly's closest region to Kenya
 
 [build]
