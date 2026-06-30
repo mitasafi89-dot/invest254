@@ -9,18 +9,27 @@ import { Feed } from '@/components/game/Feed';
 export default function GamePage() {
   return (
     <GameSocketProvider>
-      <section className="flex flex-col gap-3 pb-20 md:pb-0">
+      <section className="flex flex-col gap-3 pb-[25rem] md:pb-0">
         <PriceHeader />
         <TickerStrip />
         <GameCurve />
-        <ActivityTicker />
-        {/* Keep BUY/SELL pinned above the mobile bottom nav so they're always
-            visible without scrolling. Reverts to normal flow on md+ screens. */}
+        {/*
+          On mobile, dock the live-activity line + trade controls to the bottom of
+          the screen so BUY/SELL and the activity are always visible. The dock is
+          `fixed` (out of normal flow), so streaming activity/chat can never reflow
+          it — that removes the up/down screen jitter — and the ActivityTicker lives
+          inside the dock, so it is never hidden behind the panel while scrolling.
+          On md+ both wrappers collapse to `display:contents`, restoring the original
+          inline stacked layout (PriceHeader → … → ActivityTicker → BetPanel → Feed).
+        */}
         <div
           data-testid="bet-panel-dock"
-          className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 md:static md:bottom-auto md:z-auto"
+          className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t border-border bg-bg pt-2 md:contents"
         >
-          <BetPanel />
+          <div className="mx-auto flex w-full max-w-app flex-col gap-3 px-4 md:contents md:px-0">
+            <ActivityTicker />
+            <BetPanel />
+          </div>
         </div>
         <Feed />
       </section>

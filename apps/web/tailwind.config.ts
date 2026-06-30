@@ -5,6 +5,11 @@ const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      // Extra-small breakpoint so secondary header stats can hide on the
+      // narrowest phones (e.g. 320px) while staying visible from 360px up.
+      screens: {
+        xs: '360px',
+      },
       colors: {
         bg: 'var(--pp-bg)',
         surface: 'var(--pp-surface)',

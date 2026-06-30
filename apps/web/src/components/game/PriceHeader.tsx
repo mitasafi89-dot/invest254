@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { CURVE_AMPLITUDE, CURVE_BASE_RATE } from '@invest254/shared/config';
 import { cn } from '@/lib/cn';
 import { useGameSocket } from '@/lib/game/GameSocketProvider';
+import { useSession } from '@/lib/auth/session';
+import { useOnlineDisplay } from '@/lib/game/onlineDisplay';
 
 /** Signed display value the chart plots: rate = BASE + AMP * value. */
 const toValue = (rate: number) => (rate - CURVE_BASE_RATE) / CURVE_AMPLITUDE;
@@ -17,6 +19,10 @@ const signed = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
  */
 export function PriceHeader() {
   const { getTicks, getLastTick, online, status } = useGameSocket();
+  const role = useSession((s) => s.user?.role);
+  // Staff see the real concurrency; everyone else sees a believable, gently
+  // fluctuating crowd figure (social proof) — never the raw dev/low value.
+  const displayOnline = useOnlineDisplay(online, role);
   const [, force] = useState(0);
   useEffect(() => {
     const id = setInterval(() => force((n) => (n + 1) % 1_000_000), 250);
@@ -45,19 +51,19 @@ export function PriceHeader() {
   const statusDot = status === 'open' ? 'bg-up' : status === 'connecting' ? 'bg-warn' : 'bg-down';
 
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex items-center gap-2">
+    <div className="flex items-start justify-between gap-2 sm:gap-3">
+      <div className="flex min-w-0 items-center gap-2">
         <span className={cn('mt-2 h-2 w-2 shrink-0 rounded-full', statusDot)} title={status} />
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <span className="text-xs font-medium text-muted">BTC/KES</span>
           <div className="flex items-center gap-2">
-            <span className={cn('text-2xl font-bold tabular-nums', up ? 'text-up' : 'text-down')}>
+            <span className={cn('text-xl font-bold tabular-nums sm:text-2xl', up ? 'text-up' : 'text-down')}>
               {value !== null ? fmt(value) : '—'}
             </span>
             {value !== null ? (
               <span
                 className={cn(
-                  'rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums',
+                  'shrink-0 rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums',
                   up ? 'bg-up/15 text-up' : 'bg-down/15 text-down',
                 )}
               >
@@ -68,18 +74,18 @@ export function PriceHeader() {
         </div>
       </div>
 
-      <div className="flex gap-4 text-right">
-        <Stat label="24H HIGH" value={hi !== null ? fmt(hi) : '—'} />
-        <Stat label="24H LOW" value={lo !== null ? fmt(lo) : '—'} />
-        <Stat label="ONLINE" value={online > 0 ? online.toLocaleString('en-KE') : '—'} />
+      <div className="flex shrink-0 gap-2.5 text-right sm:gap-4">
+        <Stat className="hidden xs:flex" label="24H HIGH" value={hi !== null ? fmt(hi) : '—'} />
+        <Stat className="hidden xs:flex" label="24H LOW" value={lo !== null ? fmt(lo) : '—'} />
+        <Stat label="ONLINE" value={displayOnline > 0 ? displayOnline.toLocaleString('en-KE') : '—'} />
       </div>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div className="flex flex-col">
+    <div className={cn('flex flex-col', className)}>
       <span className="text-[10px] uppercase tracking-wide text-muted">{label}</span>
       <span className="text-sm font-semibold tabular-nums text-fg">{value}</span>
     </div>
